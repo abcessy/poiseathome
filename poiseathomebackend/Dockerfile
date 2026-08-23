@@ -24,6 +24,14 @@ WORKDIR /var/www/html
 # Copy existing application directory contents
 COPY . .
 
+# Install production PHP dependencies inside the image. The vendor directory is
+# intentionally not committed to the repository.
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader
+
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
