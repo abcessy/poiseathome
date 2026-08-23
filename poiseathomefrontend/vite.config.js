@@ -8,6 +8,6 @@ export default defineConfig({
     tailwindcss(),
   ],
   preview: {
-    allowedHosts: ['poiseathome.ruzzgd.dev'],
+    allowedHosts: ['poiseathome.site', 'www.poiseathome.site'],
   },
 })

@@ -174,9 +174,9 @@ client projects.
 
 Staging endpoints are:
 
-- Application: `https://poiseathome.ruzzgd.dev`
-- API: `https://api-poiseathome.ruzzgd.dev/api/v1`
-- Public images: `https://cdn-poiseathome.ruzzgd.dev/poiseathome-images`
+- Application: `https://poiseathome.site` (also available at `https://www.poiseathome.site`)
+- API: `https://api.poiseathome.site/api/v1`
+- Public images: `https://cdn.poiseathome.site/poiseathome-images`
 
 Deploy `global-infra` once before the first application deployment. Its
 idempotent provisioning jobs create the `poiseathome_db` database/user and
