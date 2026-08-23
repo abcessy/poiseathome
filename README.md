@@ -168,14 +168,9 @@ Pushes to `main` build both images in GHCR and deploy them to the shared cluster
 The application uses the global MySQL and MinIO services; its manifests are in
 `k8s/poiseathome`.
 
-Configure these GitHub Actions repository secrets before the first deployment:
-
-- `GHCR_PAT`: classic PAT with `read:packages` access for the cluster pull secret
-- `APP_KEY`: Laravel key generated with `php artisan key:generate --show`
-- `DB_PASSWORD`: the PoiseAtHome password configured in `global-infra/secret.yaml`
-- `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`: global MinIO credentials
-- `RESEND_API_KEY`: staging Resend key (it may be empty if email delivery is disabled)
-- `ADMIN_PASSWORD`, `DEMO_STAFF_PASSWORD`, and `DEMO_CUSTOMER_PASSWORD`
+Staging backend, database, MinIO, and GHCR credentials are declared in
+`k8s/poiseathome/secret.yaml`, following the same manifest layout as the other
+client projects.
 
 Staging endpoints are:
 
