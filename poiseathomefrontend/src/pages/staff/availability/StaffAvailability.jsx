@@ -7,9 +7,11 @@ import { useAppDialog } from '../../../context/AppDialogContext';
 const StaffAvailability = () => {
   const [isAvailable, setIsAvailable] = useState(false);
   const [daysOff, setDaysOff] = useState([]);
+  const [workingHours, setWorkingHours] = useState({ working_start_time: '09:00', working_end_time: '18:00' });
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ date: '', reason: '' });
   const [adding, setAdding] = useState(false);
+  const [savingHours, setSavingHours] = useState(false);
   const { confirmDialog, messageDialog } = useAppDialog();
 
   const loadData = async () => {
@@ -20,7 +22,12 @@ const StaffAvailability = () => {
       ]);
       
       if (profRes.ok) {
-        setIsAvailable((await profRes.json()).data.profile?.is_available || false);
+        const profile = (await profRes.json()).data.profile;
+        setIsAvailable(profile?.is_available || false);
+        setWorkingHours({
+          working_start_time: profile?.working_start_time?.slice(0, 5) || '09:00',
+          working_end_time: profile?.working_end_time?.slice(0, 5) || '18:00'
+        });
       }
       if (daysRes.ok) {
         setDaysOff((await daysRes.json()).data);
@@ -28,6 +35,27 @@ const StaffAvailability = () => {
     } catch (e) {
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveWorkingHours = async (e) => {
+    e.preventDefault();
+    setSavingHours(true);
+    try {
+      const res = await fetchApi('/staff/availability', {
+        method: 'PUT',
+        body: JSON.stringify(workingHours)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        await messageDialog(data.message || 'Working hours could not be saved.');
+        return;
+      }
+      await messageDialog('Working hours saved. Customers can now book within this time range.');
+    } catch (e) {
+      await messageDialog('Working hours could not be saved because of a network error.');
+    } finally {
+      setSavingHours(false);
     }
   };
 
@@ -119,6 +147,24 @@ const StaffAvailability = () => {
 
           {/* Days Off Management */}
           <div className="md:col-span-2 space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-lg font-bold text-text-primary mb-2">Working Hours</h3>
+              <p className="text-sm text-text-muted mb-6">Customers will only see appointment times within this daily range.</p>
+              <form onSubmit={saveWorkingHours} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1 uppercase tracking-wider">Start time</label>
+                  <input type="time" required value={workingHours.working_start_time} onChange={e => setWorkingHours({...workingHours, working_start_time: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-primary-purple" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1 uppercase tracking-wider">End time</label>
+                  <input type="time" required min={workingHours.working_start_time} value={workingHours.working_end_time} onChange={e => setWorkingHours({...workingHours, working_end_time: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-primary-purple" />
+                </div>
+                <button type="submit" disabled={savingHours || workingHours.working_end_time <= workingHours.working_start_time} className="btn-primary h-[42px]">
+                  {savingHours ? 'Saving...' : 'Save hours'}
+                </button>
+              </form>
+            </div>
+
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-bold text-text-primary mb-2">Days Off</h3>
               <p className="text-sm text-text-muted mb-6">Block specific dates where you will be unavailable.</p>

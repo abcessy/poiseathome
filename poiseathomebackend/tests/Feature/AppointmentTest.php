@@ -62,6 +62,39 @@ class AppointmentTest extends TestCase
         ]);
     }
 
+    public function test_availability_uses_staff_working_hours()
+    {
+        $this->staff->profile->update([
+            'working_start_time' => '13:00',
+            'working_end_time' => '16:00',
+        ]);
+
+        $date = now()->addDays(2)->format('Y-m-d');
+        $response = $this->actingAs($this->customer)->getJson(
+            "/api/v1/booking/availability?service_id={$this->service->id}&staff_id={$this->staff->id}&date={$date}"
+        );
+
+        $response->assertOk();
+        $starts = collect($response->json('data.slots'))->pluck('start');
+        $this->assertSame('13:00', $starts->first());
+        $this->assertSame('15:00', $starts->last());
+        $this->assertNotContains('09:00', $starts);
+    }
+
+    public function test_staff_can_update_working_hours()
+    {
+        $this->actingAs($this->staff)->putJson('/api/v1/staff/availability', [
+            'working_start_time' => '10:00',
+            'working_end_time' => '17:30',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('staff_profiles', [
+            'user_id' => $this->staff->id,
+            'working_start_time' => '10:00:00',
+            'working_end_time' => '17:30:00',
+        ]);
+    }
+
     public function test_overlapping_appointments_are_rejected()
     {
         $date = now()->addDays(2)->format('Y-m-d');

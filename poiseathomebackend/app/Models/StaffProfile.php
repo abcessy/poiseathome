@@ -16,6 +16,8 @@ class StaffProfile extends Model
         'bio',
         'profile_photo_path',
         'is_available',
+        'working_start_time',
+        'working_end_time',
     ];
 
     protected function casts(): array

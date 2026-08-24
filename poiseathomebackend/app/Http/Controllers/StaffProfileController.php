@@ -47,10 +47,12 @@ class StaffProfileController extends Controller
     public function updateAvailability(Request $request)
     {
         $validated = $request->validate([
-            'is_available' => 'required|boolean'
+            'is_available' => 'sometimes|required|boolean',
+            'working_start_time' => 'sometimes|required|date_format:H:i',
+            'working_end_time' => 'sometimes|required|date_format:H:i|after:working_start_time',
         ]);
 
-        $request->user()->profile->update(['is_available' => $validated['is_available']]);
+        $request->user()->profile->update($validated);
 
         return response()->json([
             'status' => 'success',

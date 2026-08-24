@@ -16,8 +16,8 @@ class AppointmentAvailabilityService
         $date = Carbon::parse($dateString, config('app.timezone'));
         $now = Carbon::now(config('app.timezone'));
         
-        $minNotice = config('poiseathome.booking.minimum_notice_hours', 2);
-        $maxAdvance = config('poiseathome.booking.maximum_advance_days', 60);
+        $minNotice = (int) config('poiseathome.booking.minimum_notice_hours', 2);
+        $maxAdvance = (int) config('poiseathome.booking.maximum_advance_days', 60);
 
         if ($date->startOfDay()->lt($now->startOfDay())) {
             return []; // Past date
@@ -37,10 +37,13 @@ class AppointmentAvailabilityService
         }
 
         // 3. Define Candidate Slots
-        $openingTime = Carbon::parse($date->format('Y-m-d') . ' ' . config('poiseathome.booking.opening_time', '09:00'));
-        $closingTime = Carbon::parse($date->format('Y-m-d') . ' ' . config('poiseathome.booking.closing_time', '18:00'));
-        $interval = config('poiseathome.booking.slot_interval_minutes', 30);
-        $duration = $service->duration_minutes;
+        $profile = $staff->profile;
+        $opening = $profile?->working_start_time ?: config('poiseathome.booking.opening_time', '09:00');
+        $closing = $profile?->working_end_time ?: config('poiseathome.booking.closing_time', '18:00');
+        $openingTime = Carbon::parse($date->format('Y-m-d') . ' ' . $opening, config('app.timezone'));
+        $closingTime = Carbon::parse($date->format('Y-m-d') . ' ' . $closing, config('app.timezone'));
+        $interval = (int) config('poiseathome.booking.slot_interval_minutes', 30);
+        $duration = (int) $service->duration_minutes;
 
         // 4. Fetch Existing Appointments
         $existingAppointments = Appointment::where('staff_user_id', $staff->id)

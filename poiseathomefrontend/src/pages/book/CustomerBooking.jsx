@@ -59,6 +59,8 @@ const CustomerBooking = () => {
   // Step 3: Check Availability
   const checkAvailability = async (date) => {
     setBooking(prev => ({ ...prev, date, start_time: '' }));
+    setSlots([]);
+    setError('');
     if (!date || !booking.service_id || !booking.staff_id) return;
     
     setLoading(true);
@@ -69,9 +71,11 @@ const CustomerBooking = () => {
         setSlots(data.data.slots);
       } else {
         setSlots([]);
+        setError(data.message || 'Availability could not be loaded. Please try again.');
       }
     } catch (e) {
       setSlots([]);
+      setError('Availability could not be loaded because of a network error. Please try again.');
     } finally {
       setLoading(false);
     }
