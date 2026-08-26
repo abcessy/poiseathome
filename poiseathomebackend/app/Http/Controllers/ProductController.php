@@ -18,8 +18,15 @@ class ProductController extends Controller
 
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'status' => ['sometimes', 'string', Rule::in(['active', 'archived'])],
+        ]);
         $query = Product::with(['category', 'inventory']);
-        
+
+        if (isset($validated['status'])) {
+            $query->where('is_active', $validated['status'] === 'active');
+        }
+
         if ($request->has('active_only')) {
             $query->where('is_active', true)->whereHas('category', function($q) {
                 $q->where('is_active', true);
@@ -80,5 +87,35 @@ class ProductController extends Controller
 
         $product->update($validated);
         return response()->json(['status' => 'success', 'data' => $product->fresh('inventory')]);
+    }
+
+    public function archive(Product $product)
+    {
+        if (! $product->is_active) {
+            return response()->json(['message' => 'Product is already archived.'], 422);
+        }
+
+        $product->update(['is_active' => false]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Product archived successfully.',
+            'data' => $product->fresh(['category', 'inventory']),
+        ]);
+    }
+
+    public function restore(Product $product)
+    {
+        if ($product->is_active) {
+            return response()->json(['message' => 'Product is already active.'], 422);
+        }
+
+        $product->update(['is_active' => true]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Product restored successfully.',
+            'data' => $product->fresh(['category', 'inventory']),
+        ]);
     }
 }

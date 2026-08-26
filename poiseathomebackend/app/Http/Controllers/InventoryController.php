@@ -17,7 +17,9 @@ class InventoryController extends Controller
 
     public function index(Request $request)
     {
-        $products = Product::with(['category', 'inventory'])->get()->map(function($product) {
+        $products = Product::where('is_active', true)
+            ->whereHas('category', fn ($query) => $query->where('is_active', true))
+            ->with(['category', 'inventory'])->get()->map(function($product) {
             $product->inventory_status = $product->inventory_status;
             return $product;
         });
@@ -33,6 +35,8 @@ class InventoryController extends Controller
 
     public function stockIn(Request $request, Product $product)
     {
+        $this->ensureProductIsActive($product);
+
         $validated = $request->validate([
             'quantity' => 'required|numeric|min:0.001',
             'notes' => 'nullable|string'
@@ -54,6 +58,8 @@ class InventoryController extends Controller
 
     public function stockOut(Request $request, Product $product)
     {
+        $this->ensureProductIsActive($product);
+
         $validated = $request->validate([
             'quantity' => 'required|numeric|min:0.001',
             'notes' => 'required|string'
@@ -79,6 +85,8 @@ class InventoryController extends Controller
 
     public function adjust(Request $request, Product $product)
     {
+        $this->ensureProductIsActive($product);
+
         $validated = $request->validate([
             'type' => 'required|in:adjustment_in,adjustment_out',
             'quantity' => 'required|numeric|min:0.001',
@@ -107,5 +115,10 @@ class InventoryController extends Controller
     {
         $movements = $product->stockMovements()->with('user')->orderBy('created_at', 'desc')->get();
         return response()->json(['status' => 'success', 'data' => $movements]);
+    }
+
+    private function ensureProductIsActive(Product $product): void
+    {
+        abort_unless($product->is_active && $product->category?->is_active, 422, 'Archived products cannot be adjusted.');
     }
 }

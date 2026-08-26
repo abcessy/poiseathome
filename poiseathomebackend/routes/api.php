@@ -125,7 +125,9 @@ Route::prefix('v1')->group(function () {
             
             // Phase 6: Product & Inventory
             Route::apiResource('product-categories', ProductCategoryController::class);
-            Route::apiResource('products', ProductController::class);
+            Route::apiResource('products', ProductController::class)->except('destroy');
+            Route::patch('/products/{product}/archive', [ProductController::class, 'archive']);
+            Route::patch('/products/{product}/restore', [ProductController::class, 'restore']);
             
             Route::get('/inventory', [InventoryController::class, 'index']);
             Route::post('/inventory/{product}/stock-in', [InventoryController::class, 'stockIn']);

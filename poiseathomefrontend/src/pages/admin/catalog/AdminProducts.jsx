@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { fetchApi } from '../../../services/api';
 import DashboardLayout from '../../../layouts/DashboardLayout';
-import { Edit2, Plus, Loader } from 'lucide-react';
+import { Archive, ArchiveRestore, Edit2, Plus, Loader } from 'lucide-react';
 import { formatMoney } from '../../../utils/formatters';
 import { useAppDialog } from '../../../context/AppDialogContext';
 
@@ -11,6 +11,7 @@ const AdminProducts = () => {
   const [loading, setLoading] = useState(true);
   const [editingProd, setEditingProd] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [view, setView] = useState('active');
   
   const initialForm = {
     product_category_id: '',
@@ -26,21 +27,49 @@ const AdminProducts = () => {
   };
   
   const [formData, setFormData] = useState(initialForm);
-  const { messageDialog } = useAppDialog();
+  const { confirmDialog, messageDialog } = useAppDialog();
 
-  useEffect(() => { 
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [prodRes, catRes] = await Promise.all([
-        fetchApi('/admin/products'),
+        fetchApi(`/admin/products?status=${view}`),
         fetchApi('/admin/product-categories')
       ]);
       if (prodRes.ok) setProducts((await prodRes.json()).data);
       if (catRes.ok) setCategories((await catRes.json()).data);
-    } catch(e) {} finally { setLoading(false); }
+    } catch {} finally { setLoading(false); }
+  }, [view]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleArchive = async (product) => {
+    const restoring = !product.is_active;
+    const confirmed = await confirmDialog(
+      restoring
+        ? `Restore ${product.name} to active products and inventory?`
+        : `Archive ${product.name}? Its inventory and movement history will be preserved.`,
+      {
+        title: restoring ? 'Restore product' : 'Archive product',
+        confirmLabel: restoring ? 'Restore' : 'Archive',
+        tone: restoring ? 'primary' : 'danger'
+      }
+    );
+    if (!confirmed) return;
+
+    try {
+      const action = restoring ? 'restore' : 'archive';
+      const res = await fetchApi(`/admin/products/${product.id}/${action}`, { method: 'PATCH' });
+      if (res.ok) {
+        await loadData();
+      } else {
+        const error = await res.json();
+        await messageDialog(error.message || `The product could not be ${restoring ? 'restored' : 'archived'}.`);
+      }
+    } catch {
+      await messageDialog(`The product could not be ${restoring ? 'restored' : 'archived'}.`);
+    }
   };
 
   const handleSave = async (e) => {
@@ -61,7 +90,7 @@ const AdminProducts = () => {
         const err = await res.json();
         await messageDialog(err.message || 'The product could not be saved.');
       }
-    } catch(e) {}
+    } catch {}
   };
 
   const openModal = (prod = null) => {
@@ -72,8 +101,17 @@ const AdminProducts = () => {
 
   return (
     <DashboardLayout role="admin">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-text-primary">Products</h1>
+      <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:justify-between sm:items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-text-primary">Products</h1>
+          <div className="mt-3 inline-flex rounded-lg border border-gray-200 bg-white p-1">
+            {['active', 'archived'].map(status => (
+              <button key={status} onClick={() => { setLoading(true); setView(status); }} className={`rounded-md px-4 py-2 text-sm font-bold capitalize transition-colors ${view === status ? 'bg-primary-purple text-white' : 'text-text-muted hover:text-primary-purple'}`}>
+                {status}
+              </button>
+            ))}
+          </div>
+        </div>
         <button onClick={() => openModal()} className="px-4 py-2 bg-primary-purple text-white font-bold rounded-lg hover:bg-primary-deep transition-colors flex items-center">
           <Plus className="w-5 h-5 mr-2" /> Add Product
         </button>
@@ -111,16 +149,19 @@ const AdminProducts = () => {
                         {p.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="p-4 text-right">
-                      <button onClick={() => openModal(p)} className="p-2 text-text-muted hover:text-primary-purple bg-white rounded-lg border hover:border-primary-purple transition-colors inline-block">
+                    <td className="p-4 text-right whitespace-nowrap">
+                      <button onClick={() => openModal(p)} className="p-2 mr-2 text-text-muted hover:text-primary-purple bg-white rounded-lg border hover:border-primary-purple transition-colors inline-block" aria-label={`Edit ${p.name}`}>
                         <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleArchive(p)} className={`p-2 bg-white rounded-lg border transition-colors inline-block ${p.is_active ? 'text-text-muted hover:border-red-400 hover:text-red-700' : 'text-primary-purple hover:border-primary-purple'}`} aria-label={`${p.is_active ? 'Archive' : 'Restore'} ${p.name}`}>
+                        {p.is_active ? <Archive className="w-4 h-4" /> : <ArchiveRestore className="w-4 h-4" />}
                       </button>
                     </td>
                   </tr>
                 ))}
                 {products.length === 0 && (
                   <tr>
-                    <td colSpan="6" className="p-8 text-center text-text-muted">No products found.</td>
+                    <td colSpan="6" className="p-8 text-center text-text-muted">No {view} products found.</td>
                   </tr>
                 )}
               </tbody>

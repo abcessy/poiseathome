@@ -77,25 +77,65 @@ Enter `change_this_db_password` when prompted.
 
 ## Docker Setup
 
-### 1. Create the environment file
+### 1. Install the prerequisites
+
+Install:
+
+- Git;
+- Docker Desktop (Windows or macOS), or Docker Engine with the Compose plugin (Linux).
+
+Start Docker before continuing. Allocate at least 4 GB of memory to Docker Desktop. The default setup uses host ports `3000`, `3306`, `8000`, `9000`, and `9001`; stop any application already using those ports. The frontend, backend, and MinIO ports can alternatively be changed in the root `.env`; changing the MySQL host port requires editing the `mysql` port mapping in `docker-compose.yml`.
+
+Verify Docker and Compose are available:
+
+```bash
+docker --version
+docker compose version
+```
+
+All remaining commands must be run from the repository root (the directory containing `docker-compose.yml`). No local PHP, Composer, Node.js, npm, MySQL, or MinIO installation is required.
+
+### 2. Create the environment files
 
 From the repository root:
 
 ```bash
 cp .env.example .env
+cp poiseathomebackend/.env.example poiseathomebackend/.env
 ```
 
-The root environment file owns Docker, application, MinIO, email, payment, and seed-account settings. The backend `.env` remains Laravel’s default environment template and retains the generated `APP_KEY`.
+On Windows PowerShell, use:
+
+```powershell
+Copy-Item .env.example .env
+Copy-Item poiseathomebackend/.env.example poiseathomebackend/.env
+```
+
+The root `.env` owns Docker, application, MinIO, email, payment, and seed-account settings. The backend `.env` is required by Laravel and will hold its generated `APP_KEY`. Both files are ignored by Git.
+
+Development defaults work without editing either file. Before using the system with real client data, change at least the MySQL, MinIO, administrator, staff, and customer passwords in the root `.env`. Keep `localhost` URLs when the browser and Docker are running on the same laptop.
 
 For real verification and password-reset email delivery, configure `RESEND_API_KEY` and an approved sender address. Without a usable Resend key, local codes are written to the backend log.
 
-### 2. Build and start PoiseAtHome
+### 3. Build the backend and generate Laravel's application key
+
+Run this once for each fresh installation:
+
+```bash
+docker compose build backend
+docker compose run --rm backend php artisan key:generate
+```
+
+The second command may also start MySQL and MinIO. Wait for it to report that the application key was set successfully. Do not share or commit the generated backend `.env`.
+
+### 4. Build and start PoiseAtHome
 
 ```bash
 docker compose up -d --build
+docker compose exec frontend npm run build
 ```
 
-Docker Compose starts React, Laravel, MySQL, and MinIO. The backend automatically runs outstanding migrations and the idempotent database seeders before starting the API.
+The first build downloads images and dependencies and can take several minutes. The second command creates the frontend production files in the source directory mounted by Docker Compose; it is required on a fresh clone. Docker Compose starts React, Laravel, MySQL, and MinIO. The one-time `minio-init` container should exit with code `0`; this is expected. The backend automatically runs outstanding migrations and the idempotent database seeders before starting the API.
 
 Confirm service status:
 
@@ -103,23 +143,33 @@ Confirm service status:
 docker compose ps
 ```
 
+The `frontend`, `backend`, `mysql`, and `minio` services should be running. Confirm the API and database are ready:
+
+```bash
+curl --fail http://localhost:8000/api/v1/health
+```
+
+The response should contain `"status":"ok"` and `"connected":true`. If `curl` is unavailable, open [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health) in a browser.
+
 Follow backend startup, migration, and seeding logs:
 
 ```bash
 docker compose logs -f backend
 ```
 
-### 3. Reseed manually
+Press `Ctrl+C` to stop following logs; the containers continue running.
+
+### 5. Open and smoke-test the application
+
+Open [http://localhost:3000](http://localhost:3000), confirm that service cards and images load, and sign in with the administrator account listed above. This checks the frontend, API, database, authentication, and MinIO path together.
+
+### 6. Reseed manually
 
 Automatic startup seeding normally makes this unnecessary. To rerun every idempotent seeder:
 
 ```bash
 docker compose exec backend php artisan db:seed --force
 ```
-
-### 4. Open the application
-
-Open [http://localhost:3000](http://localhost:3000), then sign in with any account listed above.
 
 Role-specific areas include:
 
@@ -141,6 +191,7 @@ docker compose restart
 
 # Rebuild after source or dependency changes
 docker compose up -d --build
+docker compose exec frontend npm run build
 
 # Stop containers while preserving stored data
 docker compose down
@@ -157,10 +208,25 @@ docker compose down --volumes
 ## Automated Checks
 
 ```bash
-docker compose exec backend php artisan test
 docker compose exec frontend npm run lint
 docker compose exec frontend npm run build
 ```
+
+The normal backend image installs production dependencies only. To install the development dependencies in a temporary container and run the backend test suite:
+
+```bash
+docker compose run --rm backend sh -c "composer install --no-interaction && php artisan test"
+```
+
+## Troubleshooting First Setup
+
+- **A port is already allocated:** stop the conflicting program, or change `FRONTEND_PORT`, `BACKEND_PORT`, `MINIO_API_PORT`, or `MINIO_CONSOLE_PORT` in `.env`. If changing browser-facing ports, also update the related URL, CORS, Sanctum, and media values in that file. Change the MySQL host mapping directly in `docker-compose.yml` only if host access to MySQL is required.
+- **Laravel reports that no application encryption key is specified:** repeat step 3 and then run `docker compose restart backend`.
+- **The frontend opens before the API is ready:** wait for migrations and seeding to finish, check `docker compose logs backend`, and refresh after the health endpoint reports a connected database.
+- **Images do not load:** confirm `minio` is running and `minio-init` exited with code `0` using `docker compose ps -a`.
+- **A container repeatedly restarts:** inspect `docker compose logs backend`, `docker compose logs frontend`, or `docker compose logs mysql`. After correcting `.env`, recreate services with `docker compose up -d --build --force-recreate`.
+- **Docker reports `permission denied` while reading `poiseathomebackend/storage`:** on Linux, restore ownership with `sudo chown -R "$(id -u):$(id -g)" poiseathomebackend/storage poiseathomebackend/bootstrap/cache`, then rebuild. Do not run Composer or Artisan with `sudo` inside the repository.
+- **Windows bind-mount or permission errors:** keep the repository in a drive shared with Docker Desktop and ensure Docker Desktop is using Linux containers.
 
 ## Kubernetes Staging Deployment
 

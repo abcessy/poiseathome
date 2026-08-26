@@ -61,6 +61,75 @@ class InventoryTest extends TestCase
         $this->assertEquals(12, $product->fresh()->inventory->available_quantity);
     }
 
+    public function test_admin_can_archive_and_restore_a_product_without_losing_inventory(): void
+    {
+        $this->actingAs($this->admin);
+
+        $product = Product::create([
+            'product_category_id' => $this->cat->id,
+            'sku' => 'ARCHIVE-001',
+            'name' => 'Archive Test Product',
+            'unit' => 'piece',
+            'low_stock_threshold' => 2,
+            'is_active' => true,
+        ]);
+        $product->inventory()->create(['available_quantity' => 8]);
+
+        $this->patchJson("/api/v1/admin/products/{$product->id}/archive")
+            ->assertOk()
+            ->assertJsonPath('data.is_active', false);
+
+        $this->getJson('/api/v1/admin/inventory')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $product->id]);
+        $this->assertEquals(8, $product->fresh()->inventory->available_quantity);
+
+        $this->postJson("/api/v1/admin/inventory/{$product->id}/stock-in", ['quantity' => 2])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Archived products cannot be adjusted.');
+        $this->assertEquals(8, $product->fresh()->inventory->available_quantity);
+
+        $this->patchJson("/api/v1/admin/products/{$product->id}/archive")
+            ->assertUnprocessable();
+
+        $this->patchJson("/api/v1/admin/products/{$product->id}/restore")
+            ->assertOk()
+            ->assertJsonPath('data.is_active', true);
+
+        $this->getJson('/api/v1/admin/inventory')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $product->id]);
+
+        $this->patchJson("/api/v1/admin/products/{$product->id}/restore")
+            ->assertUnprocessable();
+    }
+
+    public function test_product_archive_endpoints_are_admin_only_and_status_filter_is_validated(): void
+    {
+        $product = Product::create([
+            'product_category_id' => $this->cat->id,
+            'sku' => 'ARCHIVE-002',
+            'name' => 'Protected Product',
+            'unit' => 'piece',
+            'low_stock_threshold' => 1,
+            'is_active' => true,
+        ]);
+        $product->inventory()->create(['available_quantity' => 3]);
+
+        $this->actingAs($this->staff)
+            ->patchJson("/api/v1/admin/products/{$product->id}/archive")
+            ->assertForbidden();
+        $this->assertTrue($product->fresh()->is_active);
+
+        $this->actingAs($this->admin)
+            ->getJson('/api/v1/admin/products?status=invalid')
+            ->assertUnprocessable();
+
+        $this->deleteJson("/api/v1/admin/products/{$product->id}")
+            ->assertMethodNotAllowed();
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
+    }
+
     public function test_insufficient_stock_is_rejected()
     {
         $this->actingAs($this->admin);
