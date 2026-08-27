@@ -20,6 +20,22 @@ services:
     networks:
       - poise_network
 
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: poiseathome_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 64M
+    ports:
+      - "${PHPMYADMIN_PORT:-8080}:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - poise_network
+
   minio:
     image: minio/minio:latest
     container_name: poiseathome_minio

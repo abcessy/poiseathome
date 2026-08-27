@@ -75,29 +75,125 @@ docker compose exec mysql mysql -u poiseathome_user -p poiseathome_db
 
 Enter `change_this_db_password` when prompted.
 
+### phpMyAdmin database dashboard
+
+- **Dashboard:** [http://localhost:8080](http://localhost:8080)
+- **Server:** `mysql` (already selected by Docker Compose)
+- **Username:** `poiseathome_user`
+- **Password:** `change_this_db_password`
+
+phpMyAdmin starts automatically with Docker Compose and connects to MySQL over the private Compose network. Its browser port is controlled by `PHPMYADMIN_PORT` in the root `.env`. Use the MySQL credentials from that same file if you change the defaults.
+
+The dashboard is intended for local administration. Do not expose port `8080` directly to the public internet. Database changes made in phpMyAdmin affect the application immediately and can bypass Laravel validation, so create a backup before manually editing or deleting production data.
+
 ## Docker Setup
 
-### 1. Install the prerequisites
+### 1. Install Docker CLI and Docker Compose
 
-Install:
+This setup uses only the command line—Docker Desktop is not required.
 
-- Git;
-- Docker Desktop (Windows or macOS), or Docker Engine with the Compose plugin (Linux).
+#### Windows 10 or Windows 11
 
-Start Docker before continuing. Allocate at least 4 GB of memory to Docker Desktop. The default setup uses host ports `3000`, `3306`, `8000`, `9000`, and `9001`; stop any application already using those ports. The frontend, backend, and MinIO ports can alternatively be changed in the root `.env`; changing the MySQL host port requires editing the `mysql` port mapping in `docker-compose.yml`.
+PoiseAtHome uses Linux containers, so Windows runs Docker Engine through WSL 2. **This does not replace Windows and does not create a dual-boot system.** Ubuntu opens as a terminal application inside Windows, while PoiseAtHome remains accessible from the normal Windows browser.
 
-Verify Docker and Compose are available:
+The WSL and Docker installation is required only once. It normally takes approximately 10–25 minutes, depending on the computer and internet connection.
+
+##### A. Install WSL 2 once
+
+Open **PowerShell as Administrator** and install WSL 2 with Ubuntu:
+
+```powershell
+wsl --install -d Ubuntu
+wsl --update
+```
+
+If installation remains at `0.0%`, retry with:
+
+```powershell
+wsl --install --web-download -d Ubuntu
+```
+
+Restart Windows when requested. Windows will continue to be the main operating system.
+
+##### B. Open the Ubuntu terminal
+
+After restarting, open **Ubuntu** from the Windows Start menu, or run this command in PowerShell:
+
+```powershell
+wsl -d Ubuntu
+```
+
+On its first launch, Ubuntu asks you to create a Linux username and password. These credentials are only for the Ubuntu terminal and are separate from the PoiseAtHome accounts.
+
+When the prompt looks similar to `username@computer:~$`, you are inside Ubuntu. Run the Docker installation commands in the next section from this Ubuntu terminal—not from PowerShell.
+
+Microsoft documents the requirements and commands in its [official WSL installation guide](https://learn.microsoft.com/windows/wsl/install).
+
+#### Ubuntu or Ubuntu on WSL 2
+
+Install Git, Docker Engine, Docker CLI, Buildx, and the Docker Compose CLI plugin from Docker's official repository:
+
+```bash
+sudo apt-get update
+sudo apt-get install ca-certificates curl git
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+These commands follow the current [official Docker Engine installation guide](https://docs.docker.com/engine/install/ubuntu/).
+
+Start Docker Engine and configure it to start automatically when the computer boots:
+
+```bash
+sudo systemctl enable --now docker
+```
+
+Verify that Docker Engine, the CLI, and the Compose plugin are working:
 
 ```bash
 docker --version
 docker compose version
+docker info
 ```
 
-All remaining commands must be run from the repository root (the directory containing `docker-compose.yml`). No local PHP, Composer, Node.js, npm, MySQL, or MinIO installation is required.
+If `docker info` reports a permission error on Linux, either run Docker commands with `sudo` or complete Docker's [Linux post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/).
 
-### 2. Create the environment files
+On Windows, run all remaining `git` and `docker compose` commands inside the Ubuntu WSL terminal. The application URLs remain accessible from the Windows browser through `localhost`.
 
-From the repository root:
+The default setup uses host ports `3000`, `3306`, `8000`, `8080`, `9000`, and `9001`; stop any application already using those ports. The frontend, backend, phpMyAdmin, and MinIO ports can alternatively be changed in the root `.env`; changing the MySQL host port requires editing the `mysql` port mapping in `docker-compose.yml`.
+
+No local PHP, Composer, Node.js, npm, MySQL, or MinIO installation is required.
+
+### 2. Clone and enter the project
+
+On Windows, run these commands inside the Ubuntu terminal. The recommended location is the WSL home folder because Docker builds are faster and Linux file permissions work reliably there:
+
+```bash
+mkdir -p ~/projects
+cd ~/projects
+git clone <repository-url>
+cd poiseathome
+```
+
+The repository still lives on the same Windows laptop. To open it in Windows File Explorer, enter this path in the address bar and replace `<username>` with the Ubuntu username created earlier:
+
+```text
+\\wsl$\Ubuntu\home\<username>\projects\poiseathome
+```
+
+The repository may also be stored in a normal Windows folder such as `C:\Users\Client\Documents\poiseathome`. From Ubuntu, that folder is available as `/mnt/c/Users/Client/Documents/poiseathome`, although Docker operations can be slower there.
+
+If the project is already downloaded, enter its directory before running Docker commands. All remaining commands must be run from the repository root, which contains `docker-compose.yml`.
+
+### 3. Create the environment files
+
+Do not skip this step. Docker may build successfully without these files, but Laravel will return HTTP `500` when its application key is missing. From the repository root, run:
 
 ```bash
 cp .env.example .env
@@ -111,31 +207,41 @@ Copy-Item .env.example .env
 Copy-Item poiseathomebackend/.env.example poiseathomebackend/.env
 ```
 
-The root `.env` owns Docker, application, MinIO, email, payment, and seed-account settings. The backend `.env` is required by Laravel and will hold its generated `APP_KEY`. Both files are ignored by Git.
+The root `.env` owns Docker, application, MinIO, email, payment, and seed-account settings. The separate `poiseathomebackend/.env` file is required by Laravel and will hold its generated `APP_KEY`. Both files are ignored by Git. Each computer must generate its own application key; do not copy the key from another installation.
 
 Development defaults work without editing either file. Before using the system with real client data, change at least the MySQL, MinIO, administrator, staff, and customer passwords in the root `.env`. Keep `localhost` URLs when the browser and Docker are running on the same laptop.
 
 For real verification and password-reset email delivery, configure `RESEND_API_KEY` and an approved sender address. Without a usable Resend key, local codes are written to the backend log.
 
-### 3. Build the backend and generate Laravel's application key
+### 4. Build the backend and generate Laravel's application key
 
 Run this once for each fresh installation:
 
 ```bash
 docker compose build backend
-docker compose run --rm backend php artisan key:generate
+docker compose run --rm backend php artisan key:generate --force
+grep '^APP_KEY=' poiseathomebackend/.env
 ```
 
-The second command may also start MySQL and MinIO. Wait for it to report that the application key was set successfully. Do not share or commit the generated backend `.env`.
+The key check must display a non-empty value beginning with `APP_KEY=base64:`. The generation command may also start MySQL and MinIO. Do not share or commit the generated backend `.env`.
 
-### 4. Build and start PoiseAtHome
+If Laravel reports success but the key remains empty, generate a key for manual insertion:
+
+```bash
+docker compose run --rm backend php artisan key:generate --show
+```
+
+Copy the generated `base64:...` value into `poiseathomebackend/.env` after `APP_KEY=`. Keep this key private and retain it for the lifetime of this installation.
+
+### 5. Build and start PoiseAtHome
 
 ```bash
 docker compose up -d --build
 docker compose exec frontend npm run build
+docker compose restart frontend backend
 ```
 
-The first build downloads images and dependencies and can take several minutes. The second command creates the frontend production files in the source directory mounted by Docker Compose; it is required on a fresh clone. Docker Compose starts React, Laravel, MySQL, and MinIO. The one-time `minio-init` container should exit with code `0`; this is expected. The backend automatically runs outstanding migrations and the idempotent database seeders before starting the API.
+The first build downloads images and dependencies and can take several minutes. The second command creates the frontend production files in the source directory mounted by Docker Compose; it is required on a fresh clone. The restart makes both services reload the generated files and configuration. Docker Compose starts React, Laravel, MySQL, and MinIO. The one-time `minio-init` container should exit with code `0`; this is expected. The backend automatically runs outstanding migrations and the idempotent database seeders before starting the API.
 
 Confirm service status:
 
@@ -143,13 +249,21 @@ Confirm service status:
 docker compose ps
 ```
 
-The `frontend`, `backend`, `mysql`, and `minio` services should be running. Confirm the API and database are ready:
+The `frontend`, `backend`, `mysql`, `phpmyadmin`, and `minio` services should be running. A MySQL status of `healthy` means the MySQL server is responding, but the API health check below confirms that Laravel can actually connect to it:
 
 ```bash
 curl --fail http://localhost:8000/api/v1/health
 ```
 
 The response should contain `"status":"ok"` and `"connected":true`. If `curl` is unavailable, open [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health) in a browser.
+
+If the API returns HTTP `500`, first confirm that `APP_KEY` is not empty in `poiseathomebackend/.env`, then run:
+
+```bash
+docker compose exec backend php artisan optimize:clear
+docker compose restart backend
+docker compose logs --tail=100 backend
+```
 
 Follow backend startup, migration, and seeding logs:
 
@@ -159,11 +273,22 @@ docker compose logs -f backend
 
 Press `Ctrl+C` to stop following logs; the containers continue running.
 
-### 5. Open and smoke-test the application
+### 6. Open and smoke-test the application
 
-Open [http://localhost:3000](http://localhost:3000), confirm that service cards and images load, and sign in with the administrator account listed above. This checks the frontend, API, database, authentication, and MinIO path together.
+Open [http://localhost:3000](http://localhost:3000), confirm that service cards and images load, and sign in with the administrator account listed above. This checks the frontend, API, database, authentication, and MinIO path together. Open [http://localhost:8080](http://localhost:8080) and sign in with the MySQL credentials above to verify the optional database dashboard.
 
-### 6. Reseed manually
+### 7. Start PoiseAtHome again later on Windows
+
+The WSL and Docker installation steps are not repeated. Start Windows normally, open the Ubuntu terminal, and run:
+
+```bash
+cd ~/projects/poiseathome
+docker compose up -d
+```
+
+Then open [http://localhost:3000](http://localhost:3000) in the normal Windows browser.
+
+### 8. Reseed manually
 
 Automatic startup seeding normally makes this unnecessary. To rerun every idempotent seeder:
 
@@ -220,8 +345,8 @@ docker compose run --rm backend sh -c "composer install --no-interaction && php 
 
 ## Troubleshooting First Setup
 
-- **A port is already allocated:** stop the conflicting program, or change `FRONTEND_PORT`, `BACKEND_PORT`, `MINIO_API_PORT`, or `MINIO_CONSOLE_PORT` in `.env`. If changing browser-facing ports, also update the related URL, CORS, Sanctum, and media values in that file. Change the MySQL host mapping directly in `docker-compose.yml` only if host access to MySQL is required.
-- **Laravel reports that no application encryption key is specified:** repeat step 3 and then run `docker compose restart backend`.
+- **A port is already allocated:** stop the conflicting program, or change `FRONTEND_PORT`, `BACKEND_PORT`, `PHPMYADMIN_PORT`, `MINIO_API_PORT`, or `MINIO_CONSOLE_PORT` in `.env`. If changing browser-facing application ports, also update the related URL, CORS, Sanctum, and media values in that file. Change the MySQL host mapping directly in `docker-compose.yml` only if host access to MySQL is required.
+- **Laravel reports that no application encryption key is specified:** repeat step 4 and then run `docker compose restart backend`.
 - **The frontend opens before the API is ready:** wait for migrations and seeding to finish, check `docker compose logs backend`, and refresh after the health endpoint reports a connected database.
 - **Images do not load:** confirm `minio` is running and `minio-init` exited with code `0` using `docker compose ps -a`.
 - **A container repeatedly restarts:** inspect `docker compose logs backend`, `docker compose logs frontend`, or `docker compose logs mysql`. After correcting `.env`, recreate services with `docker compose up -d --build --force-recreate`.
