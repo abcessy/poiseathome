@@ -18,10 +18,16 @@ return [
         'key' => env('POSTMARK_API_KEY'),
     ],
 
+    'brevo' => [
+        'key' => env('BREVO_API_KEY', env('RESEND_API_KEY')),
+        'from_email' => env('BREVO_FROM_EMAIL', env('RESEND_FROM_EMAIL', 'noreply@poiseathome.site')),
+        'from_name' => env('BREVO_FROM_NAME', env('RESEND_FROM_NAME', 'PoiseAtHome')),
+    ],
+
     'resend' => [
-        'key' => env('RESEND_API_KEY'),
-        'from_email' => env('RESEND_FROM_EMAIL'),
-        'from_name' => env('RESEND_FROM_NAME', 'PoiseAtHome'),
+        'key' => env('BREVO_API_KEY', env('RESEND_API_KEY')),
+        'from_email' => env('BREVO_FROM_EMAIL', env('RESEND_FROM_EMAIL', 'noreply@poiseathome.site')),
+        'from_name' => env('BREVO_FROM_NAME', env('RESEND_FROM_NAME', 'PoiseAtHome')),
     ],
 
     'ses' => [

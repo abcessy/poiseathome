@@ -3,7 +3,7 @@
 namespace App\Providers;
 
 use App\Contracts\TransactionalEmailService;
-use App\Services\Email\ResendEmailService;
+use App\Services\Email\BrevoEmailService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -13,7 +13,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(TransactionalEmailService::class, ResendEmailService::class);
+        $this->app->bind(TransactionalEmailService::class, BrevoEmailService::class);
     }
 
     /**

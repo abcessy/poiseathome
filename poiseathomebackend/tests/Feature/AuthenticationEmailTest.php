@@ -19,6 +19,9 @@ class AuthenticationEmailTest extends TestCase
         parent::setUp();
 
         config([
+            'services.brevo.key' => null,
+            'services.brevo.from_email' => 'noreply@example.com',
+            'services.brevo.from_name' => 'PoiseAtHome',
             'services.resend.key' => null,
             'services.resend.from_email' => 'noreply@example.com',
             'services.resend.from_name' => 'PoiseAtHome',
@@ -36,11 +39,11 @@ class AuthenticationEmailTest extends TestCase
 
         $this->assertNotSame($code, $record->code_hash);
         $this->assertTrue(Hash::check($code, $record->code_hash));
-        Http::assertSent(fn ($request) => $request->url() === 'https://api.resend.com/emails'
-            && $request->hasHeader('Authorization', 'Bearer test-resend-key')
-            && $request['from'] === 'PoiseAtHome <noreply@example.com>'
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.brevo.com/v3/smtp/email'
+            && $request->hasHeader('api-key', 'test-brevo-key')
+            && $request['sender'] === ['name' => 'PoiseAtHome', 'email' => 'noreply@example.com']
             && $request['subject'] === 'Verify your PoiseAtHome email'
-            && $request['to'] === ['verification@example.com']
+            && $request['to'] === [['email' => 'verification@example.com']]
         );
     }
 
@@ -90,8 +93,8 @@ class AuthenticationEmailTest extends TestCase
 
     public function test_resend_provider_failure_is_handled_without_exposing_provider_details(): void
     {
-        config(['services.resend.key' => 'test-resend-key']);
-        Http::fake(['api.resend.com/*' => Http::response(['message' => 'provider detail'], 500)]);
+        config(['services.brevo.key' => 'test-brevo-key']);
+        Http::fake(['api.brevo.com/*' => Http::response(['message' => 'provider detail'], 500)]);
 
         $response = $this->register('failure@example.com');
 
@@ -112,7 +115,7 @@ class AuthenticationEmailTest extends TestCase
 
         Http::assertNothingSent();
         Log::shouldNotHaveReceived('info');
-        Log::shouldHaveReceived('error')->with('Transactional email delivery is unavailable because Resend is not configured.');
+        Log::shouldHaveReceived('error')->with('Transactional email delivery is unavailable because Brevo is not configured.');
     }
 
     public function test_forgot_password_is_indistinguishable_for_existing_and_unknown_emails(): void
@@ -140,7 +143,7 @@ class AuthenticationEmailTest extends TestCase
         $this->assertNotSame($code, $record->code_hash);
         $this->assertTrue(Hash::check($code, $record->code_hash));
         Http::assertSent(fn ($request) => $request['subject'] === 'Reset your PoiseAtHome password'
-            && $request['to'] === ['reset@example.com']
+            && $request['to'] === [['email' => 'reset@example.com']]
         );
     }
 
@@ -314,8 +317,14 @@ class AuthenticationEmailTest extends TestCase
 
     private function fakeResend(): void
     {
-        config(['services.resend.key' => 'test-resend-key']);
-        Http::fake(['api.resend.com/*' => Http::response(['id' => 'email_test_123'], 200)]);
+        config([
+            'services.brevo.key' => 'test-brevo-key',
+            'services.resend.key' => 'test-brevo-key',
+        ]);
+        Http::fake([
+            'api.brevo.com/*' => Http::response(['messageId' => 'email_test_123'], 201),
+            'api.resend.com/*' => Http::response(['id' => 'email_test_123'], 200),
+        ]);
     }
 
     private function register(string $email)
@@ -334,7 +343,8 @@ class AuthenticationEmailTest extends TestCase
     private function latestCodeFromEmail(): string
     {
         $request = Http::recorded()->last()[0];
-        preg_match('/\b(\d{6})\b/', $request['text'], $matches);
+        $body = $request['htmlContent'] ?? $request['text'] ?? '';
+        preg_match('/\b(\d{6})\b/', $body, $matches);
 
         return $matches[1];
     }
