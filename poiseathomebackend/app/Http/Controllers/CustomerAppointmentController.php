@@ -55,10 +55,17 @@ class CustomerAppointmentController extends Controller
             return response()->json(['message' => 'Appointment cannot be cancelled at this stage.'], 400);
         }
 
+        $validated = $request->validate([
+            'reason' => 'required|string|min:3|max:500',
+        ], [
+            'reason.required' => 'A cancellation reason is required.',
+            'reason.min' => 'Please provide a cancellation reason with at least 3 characters.',
+        ]);
+
         $appointment->update([
             'status' => 'cancelled',
             'cancelled_by' => $request->user()->id,
-            'cancellation_reason' => $request->input('reason', 'Cancelled by customer'),
+            'cancellation_reason' => $validated['reason'],
             'cancelled_at' => now(),
         ]);
 

@@ -15,8 +15,11 @@ const CustomerBooking = () => {
   const [staffList, setStaffList] = useState([]);
   const [slots, setSlots] = useState([]);
   
+  const initialService = searchParams.get('service') ? [parseInt(searchParams.get('service'), 10)] : [];
+  const [selectedServiceIds, setSelectedServiceIds] = useState(initialService);
+  const [extendedMinutes, setExtendedMinutes] = useState(0);
+
   const [booking, setBooking] = useState({
-    service_id: searchParams.get('service') || '',
     staff_id: '',
     date: '',
     start_time: '',
@@ -28,7 +31,7 @@ const CustomerBooking = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [createdAppointment, setCreatedAppointment] = useState(null);
-  const stepLabels = ['Service', 'Hairstylist', 'Date & time', 'Location', 'Review'];
+  const stepLabels = ['Services', 'Hairstylist', 'Date & time', 'Location', 'Review'];
 
   // Step 1: Load Services
   useEffect(() => {
@@ -37,38 +40,61 @@ const CustomerBooking = () => {
       fetchApi('/services?home_service=true')
         .then(res => res.json())
         .then(data => {
-          setServices(data.data);
+          setServices(data.data || []);
+          setLoading(false);
+        })
+        .catch(() => {
+          setServices([]);
           setLoading(false);
         });
     }
   }, [step]);
 
-  // Step 2: Load Qualified Staff
+  // Step 2: Load Qualified Staff for ALL selected services
   useEffect(() => {
-    if (step === 2 && booking.service_id) {
+    if (step === 2 && selectedServiceIds.length > 0) {
       setLoading(true);
-      fetchApi(`/booking/services/${booking.service_id}/staff`)
+      const query = selectedServiceIds.join(',');
+      fetchApi(`/booking/services/${selectedServiceIds[0]}/staff?service_ids=${query}`)
         .then(res => res.json())
         .then(data => {
-          setStaffList(data.data);
+          setStaffList(data.data || []);
+          setLoading(false);
+        })
+        .catch(() => {
+          setStaffList([]);
           setLoading(false);
         });
     }
-  }, [step, booking.service_id]);
+  }, [step, selectedServiceIds]);
+
+  const toggleServiceSelection = (id) => {
+    const numId = parseInt(id, 10);
+    setSelectedServiceIds(prev => 
+      prev.includes(numId) ? prev.filter(x => x !== numId) : [...prev, numId]
+    );
+  };
+
+  const getSelectedServices = () => services.filter(s => selectedServiceIds.includes(s.id));
+  const getSelectedStaff = () => staffList.find(s => s.id == booking.staff_id);
+
+  const totalDuration = getSelectedServices().reduce((sum, s) => sum + (parseInt(s.duration_minutes, 10) || 0), 0) + extendedMinutes;
+  const totalPrice = getSelectedServices().reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
 
   // Step 3: Check Availability
   const checkAvailability = async (date) => {
     setBooking(prev => ({ ...prev, date, start_time: '' }));
     setSlots([]);
     setError('');
-    if (!date || !booking.service_id || !booking.staff_id) return;
+    if (!date || selectedServiceIds.length === 0 || !booking.staff_id) return;
     
     setLoading(true);
     try {
-      const res = await fetchApi(`/booking/availability?service_id=${booking.service_id}&staff_id=${booking.staff_id}&date=${date}`);
+      const query = selectedServiceIds.join(',');
+      const res = await fetchApi(`/booking/availability?service_ids=${query}&staff_id=${booking.staff_id}&date=${date}&extended_minutes=${extendedMinutes}`);
       const data = await res.json();
       if (res.ok) {
-        setSlots(data.data.slots);
+        setSlots(data.data.slots || []);
       } else {
         setSlots([]);
         setError(data.message || 'Availability could not be loaded. Please try again.');
@@ -85,9 +111,21 @@ const CustomerBooking = () => {
     setLoading(true);
     setError('');
     try {
+      const payload = {
+        service_id: selectedServiceIds[0],
+        service_ids: selectedServiceIds,
+        staff_id: booking.staff_id,
+        date: booking.date,
+        start_time: booking.start_time,
+        service_address: booking.service_address,
+        address_notes: booking.address_notes || null,
+        customer_notes: booking.customer_notes || null,
+        extended_minutes: extendedMinutes,
+      };
+
       const res = await fetchApi('/appointments', {
         method: 'POST',
-        body: JSON.stringify(booking)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {
@@ -106,9 +144,6 @@ const CustomerBooking = () => {
       setLoading(false);
     }
   };
-
-  const getSelectedService = () => services.find(s => s.id == booking.service_id);
-  const getSelectedStaff = () => staffList.find(s => s.id == booking.staff_id);
 
   return (
     <div className="min-h-screen bg-background font-sans text-text-primary">
@@ -138,34 +173,91 @@ const CustomerBooking = () => {
 
         <div className="min-h-[400px] overflow-hidden rounded-2xl border border-purple-100 bg-white shadow-sm">
           
-          {/* STEP 1: SERVICE */}
+          {/* STEP 1: SERVICES & EXTEND TIME */}
           {step === 1 && (
-            <div className="p-6 md:p-8"><div className="mb-6"><p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 1 of 5</p><h2 className="mt-2 text-2xl font-bold">Select a service</h2><p className="mt-1 text-sm text-text-muted">Start with the treatment you would like at home.</p></div>
-              {loading ? <div className="text-center py-8 text-text-muted">Loading services...</div> : (
+            <div className="p-6 md:p-8">
+              <div className="mb-6 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 1 of 5</p>
+                  <h2 className="mt-2 text-2xl font-bold">Select services</h2>
+                  <p className="mt-1 text-sm text-text-muted">Choose one or more treatments you would like for your home visit.</p>
+                </div>
+                {selectedServiceIds.length > 0 && (
+                  <div className="rounded-xl bg-lavender px-4 py-2 text-right text-xs font-semibold text-primary-deep">
+                    <span>{selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} selected</span>
+                    <span className="mx-2 text-purple-300">•</span>
+                    <span>{formatDuration(totalDuration)}</span>
+                    <span className="mx-2 text-purple-300">•</span>
+                    <span className="text-sm font-bold text-primary-purple">{formatMoney(totalPrice)}</span>
+                  </div>
+                )}
+              </div>
+
+              {loading ? (
+                <div className="text-center py-8 text-text-muted">Loading services...</div>
+              ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {services.map(svc => (
-                    <button type="button"
-                      key={svc.id} 
-                      onClick={() => setBooking({...booking, service_id: svc.id})}
-                      className={`w-full rounded-2xl border p-5 text-left transition ${booking.service_id == svc.id ? 'border-primary-purple bg-lavender/60 ring-2 ring-purple-100' : 'border-gray-200 hover:-translate-y-0.5 hover:border-primary-purple/50 hover:shadow-sm'}`}
-                    >
-                      <h3 className="font-bold text-text-primary mb-1">{svc.name}</h3>
-                      <p className="text-sm text-text-muted mb-3 line-clamp-2">{svc.description}</p>
-                      <div className="flex justify-between items-center text-sm font-medium">
-                        <span className="text-text-muted">{formatDuration(svc.duration_minutes)}</span>
-                        <span className="text-primary-purple">{formatMoney(svc.price)}</span>
-                      </div>
-                    </button>
-                  ))}
+                  {services.map(svc => {
+                    const isSelected = selectedServiceIds.includes(svc.id);
+                    return (
+                      <button
+                        type="button"
+                        key={svc.id} 
+                        onClick={() => toggleServiceSelection(svc.id)}
+                        className={`group relative w-full rounded-2xl border p-5 text-left transition ${isSelected ? 'border-primary-purple bg-lavender/60 ring-2 ring-primary-purple/30 shadow-sm' : 'border-gray-200 hover:-translate-y-0.5 hover:border-primary-purple/50 hover:shadow-sm'}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="font-bold text-text-primary mb-1">{svc.name}</h3>
+                          <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${isSelected ? 'border-primary-purple bg-primary-purple text-white' : 'border-gray-300 bg-white group-hover:border-primary-purple'}`}>
+                            {isSelected && <CheckCircle className="h-4 w-4" />}
+                          </div>
+                        </div>
+                        <p className="text-sm text-text-muted mb-3 line-clamp-2">{svc.description}</p>
+                        <div className="flex justify-between items-center text-sm font-medium">
+                          <span className="text-text-muted">{formatDuration(svc.duration_minutes)}</span>
+                          <span className="text-primary-purple font-bold">{formatMoney(svc.price)}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-              <div className="mt-8 flex justify-end">
+
+              {/* Sir Prado: Extend-Time Feature for Scheduling */}
+              <div className="mt-8 rounded-2xl border border-purple-100 bg-purple-50/40 p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-text-primary flex items-center gap-1.5">
+                      <Clock className="h-4 w-4 text-primary-purple" />
+                      Need extra appointment time? (Optional)
+                    </h4>
+                    <p className="text-xs text-text-muted mt-0.5">Add extra buffer minutes for thicker hair, detailed styling, or comprehensive consultation.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[0, 15, 30, 45, 60].map(mins => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setExtendedMinutes(mins)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${extendedMinutes === mins ? 'bg-primary-purple text-white shadow-sm' : 'bg-white border border-gray-200 text-text-primary hover:border-primary-purple'}`}
+                      >
+                        {mins === 0 ? 'Standard' : `+${mins} min`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 flex items-center justify-between border-t border-gray-100 pt-5">
+                <p className="text-xs text-text-muted">
+                  {selectedServiceIds.length === 0 ? 'Select at least one service to continue' : `${selectedServiceIds.length} item(s) selected`}
+                </p>
                 <button 
-                  disabled={!booking.service_id} 
+                  disabled={selectedServiceIds.length === 0} 
                   onClick={() => setStep(2)}
                   className="btn-primary"
                 >
-                  Continue <ArrowRight className="w-4 h-4 ml-2" />
+                  Continue to Stylist <ArrowRight className="w-4 h-4 ml-2" />
                 </button>
               </div>
             </div>
@@ -173,16 +265,28 @@ const CustomerBooking = () => {
 
           {/* STEP 2: STAFF */}
           {step === 2 && (
-            <div className="p-6 md:p-8"><div className="mb-6"><p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 2 of 5</p><h2 className="mt-2 text-2xl font-bold">Choose your hairstylist</h2><p className="mt-1 text-sm text-text-muted">Select a qualified professional for your chosen service.</p></div>
-              {loading ? <div className="text-center py-8 text-text-muted">Finding qualified professionals...</div> : staffList.length === 0 ? (
-                <div className="text-center py-8 text-text-muted">No hairstylists currently available for this service.</div>
+            <div className="p-6 md:p-8">
+              <div className="mb-6">
+                <p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 2 of 5</p>
+                <h2 className="mt-2 text-2xl font-bold">Choose your hairstylist</h2>
+                <p className="mt-1 text-sm text-text-muted">Select a professional qualified for all your selected services.</p>
+              </div>
+
+              {loading ? (
+                <div className="text-center py-8 text-text-muted">Finding qualified professionals...</div>
+              ) : staffList.length === 0 ? (
+                <div className="text-center py-8 text-text-muted rounded-xl bg-gray-50 border border-gray-200 p-6">
+                  <p className="font-semibold text-text-primary">No hairstylists currently available for all selected services.</p>
+                  <p className="text-sm text-text-muted mt-1">Please try modifying your selected services or choose fewer items.</p>
+                  <button onClick={() => setStep(1)} className="btn-outline mt-4">Adjust Service Selection</button>
+                </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {staffList.map(staff => (
                     <button type="button"
                       key={staff.id} 
                       onClick={() => setBooking({...booking, staff_id: staff.id})}
-                      className={`flex w-full items-center rounded-2xl border p-4 text-left transition ${booking.staff_id == staff.id ? 'border-primary-purple bg-lavender/60 ring-2 ring-purple-100' : 'border-gray-200 hover:border-primary-purple/50 hover:shadow-sm'}`}
+                      className={`flex w-full items-center rounded-2xl border p-4 text-left transition ${booking.staff_id == staff.id ? 'border-primary-purple bg-lavender/60 ring-2 ring-primary-purple/30' : 'border-gray-200 hover:border-primary-purple/50 hover:shadow-sm'}`}
                     >
                       <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center mr-4 shrink-0">
                         {staff.profile_photo_url ? (
@@ -191,7 +295,7 @@ const CustomerBooking = () => {
                       </div>
                       <div>
                         <h3 className="font-bold text-text-primary">{staff.display_name}</h3>
-                        <p className="text-sm text-text-muted">{staff.specialization || 'Hairstylist'}</p>
+                        <p className="text-sm text-text-muted">{staff.specialization || 'Qualified Stylist'}</p>
                       </div>
                     </button>
                   ))}
@@ -212,7 +316,13 @@ const CustomerBooking = () => {
 
           {/* STEP 3: DATE & TIME */}
           {step === 3 && (
-            <div className="p-6 md:p-8"><div className="mb-6"><p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 3 of 5</p><h2 className="mt-2 text-2xl font-bold">Choose a date and time</h2><p className="mt-1 text-sm text-text-muted">Available times update when you select a date.</p></div>
+            <div className="p-6 md:p-8">
+              <div className="mb-6">
+                <p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 3 of 5</p>
+                <h2 className="mt-2 text-2xl font-bold">Choose a date and time</h2>
+                <p className="mt-1 text-sm text-text-muted">Available appointment slots calculated for your total duration ({formatDuration(totalDuration)}).</p>
+              </div>
+
               <div className="mb-6">
                 <label className="block text-sm font-medium mb-2">Date</label>
                 <input 
@@ -236,6 +346,7 @@ const CustomerBooking = () => {
                       {slots.map((slot, idx) => (
                         <button 
                           key={idx}
+                          type="button"
                           onClick={() => setBooking({...booking, start_time: slot.start})}
                           className={`min-h-10 rounded-lg border px-3 py-2 text-sm font-medium ${booking.start_time === slot.start ? 'border-primary-purple bg-primary-purple text-white' : 'border-gray-200 bg-white text-text-primary hover:border-primary-purple'}`}
                         >
@@ -262,7 +373,12 @@ const CustomerBooking = () => {
 
           {/* STEP 4: HOME DETAILS */}
           {step === 4 && (
-            <div className="p-6 md:p-8"><div className="mb-6"><p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 4 of 5</p><h2 className="mt-2 text-2xl font-bold">Where should we meet you?</h2><p className="mt-1 text-sm text-text-muted">Confirm the location and add anything your stylist should know.</p></div>
+            <div className="p-6 md:p-8">
+              <div className="mb-6">
+                <p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 4 of 5</p>
+                <h2 className="mt-2 text-2xl font-bold">Where should we meet you?</h2>
+                <p className="mt-1 text-sm text-text-muted">Confirm the location and add anything your stylist should know.</p>
+              </div>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Service Address *</label>
@@ -312,22 +428,40 @@ const CustomerBooking = () => {
 
           {/* STEP 5: REVIEW */}
           {step === 5 && (
-            <div className="p-6 md:p-8"><div className="mb-6"><p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 5 of 5</p><h2 className="mt-2 text-2xl font-bold">Review your appointment</h2><p className="mt-1 text-sm text-text-muted">Make sure every detail is correct before confirming.</p></div>
+            <div className="p-6 md:p-8">
+              <div className="mb-6">
+                <p className="text-xs font-bold uppercase tracking-[.15em] text-primary-purple">Step 5 of 5</p>
+                <h2 className="mt-2 text-2xl font-bold">Review your appointment</h2>
+                <p className="mt-1 text-sm text-text-muted">Make sure every detail is correct before confirming.</p>
+              </div>
               
               <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 space-y-4 mb-8">
-                <div className="flex justify-between pb-4 border-b border-gray-200">
-                  <div>
-                    <p className="text-sm text-text-muted mb-1">Service</p>
-                    <p className="font-bold text-text-primary text-lg">{getSelectedService()?.name}</p>
-                    <p className="text-sm text-primary-purple font-medium">{formatDuration(getSelectedService()?.duration_minutes)}</p>
+                <div>
+                  <p className="text-sm font-semibold text-text-muted mb-2">Selected Services ({getSelectedServices().length})</p>
+                  <div className="divide-y divide-gray-200 border-y border-gray-200">
+                    {getSelectedServices().map(s => (
+                      <div key={s.id} className="flex justify-between py-2.5 text-sm">
+                        <div>
+                          <p className="font-semibold text-text-primary">{s.name}</p>
+                          <p className="text-xs text-text-muted">{formatDuration(s.duration_minutes)}</p>
+                        </div>
+                        <span className="font-semibold text-text-primary">{formatMoney(s.price)}</span>
+                      </div>
+                    ))}
+                    {extendedMinutes > 0 && (
+                      <div className="flex justify-between py-2 text-sm text-primary-deep bg-purple-50/50 px-2 rounded">
+                        <span>Extended Time Buffer</span>
+                        <span className="font-semibold">+{extendedMinutes} mins</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-text-muted mb-1">Price</p>
-                    <p className="font-bold text-text-primary text-lg">{formatMoney(getSelectedService()?.price)}</p>
+                  <div className="flex justify-between pt-3 font-bold text-text-primary">
+                    <span>Total Estimated Duration: {formatDuration(totalDuration)}</span>
+                    <span className="text-lg text-primary-purple">{formatMoney(totalPrice)}</span>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-gray-200">
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
                   <div>
                     <p className="text-sm text-text-muted mb-1">Date</p>
                     <p className="font-medium flex items-center"><CalendarIcon className="w-4 h-4 mr-1.5 text-primary-purple"/> {booking.date}</p>
@@ -338,7 +472,7 @@ const CustomerBooking = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-gray-200">
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
                   <div>
                     <p className="text-sm text-text-muted mb-1">Hairstylist</p>
                     <p className="font-medium flex items-center"><User className="w-4 h-4 mr-1.5 text-primary-purple"/> {getSelectedStaff()?.display_name}</p>
@@ -352,7 +486,7 @@ const CustomerBooking = () => {
 
               <div className="flex items-start rounded-xl border border-purple-100 bg-lavender/50 p-4 text-sm font-medium text-primary-deep">
                 <ShieldCheck className="mr-3 mt-0.5 h-5 w-5 shrink-0" />
-                <p>By confirming, you agree to the appointment schedule. You will be required to submit a 30% downpayment on the next screen to verify your booking.</p>
+                <p>By confirming, you agree to the appointment schedule. You will be required to submit a 30% downpayment ({formatMoney(totalPrice * 0.3)}) on the next screen to verify your booking.</p>
               </div>
 
               <div className="mt-8 flex justify-between">
@@ -381,8 +515,8 @@ const CustomerBooking = () => {
               <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 mb-8 max-w-md w-full mx-auto text-left">
                 <h3 className="font-bold text-lg mb-4 text-center">Next Step — Downpayment</h3>
                 <div className="flex justify-between items-center mb-2 text-sm">
-                  <span className="text-text-muted">Service Total:</span>
-                  <span className="font-semibold">{formatMoney(getSelectedService()?.price)}</span>
+                  <span className="text-text-muted">Total Service Cost:</span>
+                  <span className="font-semibold">{formatMoney(createdAppointment?.service_price_snapshot)}</span>
                 </div>
                 <div className="flex justify-between items-center mb-4 text-sm">
                   <span className="text-text-muted">Required Downpayment (30%):</span>

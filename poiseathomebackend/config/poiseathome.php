@@ -11,6 +11,7 @@ return [
         'slot_interval_minutes' => env('POISE_SLOT_INTERVAL_MINUTES', 30),
         'minimum_notice_hours' => env('POISE_MIN_NOTICE_HOURS', 2),
         'maximum_advance_days' => env('POISE_MAX_ADVANCE_DAYS', 60),
+        'max_concurrent_appointments' => env('POISE_MAX_CONCURRENT_APPOINTMENTS', 0),
     ],
     'payment' => [
         'downpayment_percentage' => env('POISE_DOWNPAYMENT_PERCENTAGE', 30),

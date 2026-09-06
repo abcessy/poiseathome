@@ -47,6 +47,22 @@ class StaffReportController extends Controller
             'services_performed' => $appointments->where('status', 'completed')->count(), // simplistic for now
         ];
 
+        if ($request->has('format')) {
+            $summaryRows = [
+                ['metric' => 'Appointments Today', 'value' => $data['appointments_today']],
+                ['metric' => 'Upcoming Appointments', 'value' => $data['appointments_upcoming']],
+                ['metric' => 'Completed Appointments', 'value' => $data['appointments_completed']],
+                ['metric' => 'Cancelled Appointments', 'value' => $data['appointments_cancelled']],
+                ['metric' => 'Services Performed', 'value' => $data['services_performed']],
+            ];
+            return $this->exporter->export(
+                $request->format,
+                $summaryRows,
+                ['metric' => 'Staff Operational Metric', 'value' => 'Count'],
+                'Staff Overview Report'
+            );
+        }
+
         return response()->json(['status' => 'success', 'data' => $data]);
     }
 

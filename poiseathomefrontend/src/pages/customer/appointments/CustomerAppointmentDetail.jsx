@@ -4,7 +4,7 @@ import { fetchApi } from '../../../services/api';
 import { formatMoney, formatDuration, formatDate, formatTime, formatDateTime } from '../../../utils/formatters';
 import DashboardLayout from '../../../layouts/DashboardLayout';
 import { StatusBadge, PaymentStatusBadge } from './CustomerAppointments';
-import { ArrowLeft, Calendar, Clock, MapPin, User, AlertCircle, UploadCloud, Scissors } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, User, AlertCircle, UploadCloud, Scissors, Star, X } from 'lucide-react';
 import PaymentSubmissionModal from './PaymentSubmissionModal';
 import { useAppDialog } from '../../../context/AppDialogContext';
 
@@ -13,8 +13,20 @@ const CustomerAppointmentDetail = () => {
   const navigate = useNavigate();
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Cancellation modal state
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState('');
+
+  // Rating modal state
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [stylistRating, setStylistRating] = useState(5);
+  const [shopRating, setShopRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [ratingError, setRatingError] = useState('');
   
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -28,8 +40,17 @@ const CustomerAppointmentDetail = () => {
   const loadApp = async () => {
     try {
       const res = await fetchApi(`/customer/appointments/${id}`);
-      if (res.ok) setApp((await res.json()).data);
-      else navigate('/account/appointments');
+      if (res.ok) {
+        const data = (await res.json()).data;
+        setApp(data);
+        if (data.review) {
+          setStylistRating(data.review.stylist_rating || data.review.rating || 5);
+          setShopRating(data.review.shop_rating || data.review.rating || 5);
+          setReviewComment(data.review.comment || '');
+        }
+      } else {
+        navigate('/account/appointments');
+      }
     } catch(e) {} finally { setLoading(false); }
   };
 
@@ -40,21 +61,60 @@ const CustomerAppointmentDetail = () => {
     } catch (e) {}
   };
 
-  const handleCancel = async () => {
-    if (!await confirmDialog('Cancel this appointment? This may affect its payment and scheduling status.', { title: 'Cancel appointment', confirmLabel: 'Cancel appointment', tone: 'danger' })) return;
+  const handleCancelSubmit = async (e) => {
+    e.preventDefault();
+    if (!cancelReason.trim() || cancelReason.trim().length < 3) {
+      setCancelError('Please enter a cancellation reason (minimum 3 characters).');
+      return;
+    }
+
     setCancelling(true);
+    setCancelError('');
     try {
       const res = await fetchApi(`/customer/appointments/${id}/cancel`, {
         method: 'POST',
-        body: JSON.stringify({ reason: cancelReason || 'Customer requested cancellation' })
+        body: JSON.stringify({ reason: cancelReason.trim() })
       });
       if (res.ok) {
-        loadApp();
+        setShowCancelModal(false);
         setCancelReason('');
+        loadApp();
       } else {
-        await messageDialog('The appointment could not be cancelled.');
+        const err = await res.json();
+        setCancelError(err.message || 'The appointment could not be cancelled.');
       }
-    } catch (e) {} finally { setCancelling(false); }
+    } catch (e) {
+      setCancelError('A network error occurred while cancelling the appointment.');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleRatingSubmit = async (e) => {
+    e.preventDefault();
+    setRatingSubmitting(true);
+    setRatingError('');
+    try {
+      const res = await fetchApi(`/customer/appointments/${id}/review`, {
+        method: 'POST',
+        body: JSON.stringify({
+          stylist_rating: stylistRating,
+          shop_rating: shopRating,
+          comment: reviewComment.trim() || null
+        })
+      });
+      if (res.ok) {
+        setShowRatingModal(false);
+        loadApp();
+      } else {
+        const err = await res.json();
+        setRatingError(err.message || 'Failed to submit review.');
+      }
+    } catch (e) {
+      setRatingError('Network error while submitting rating.');
+    } finally {
+      setRatingSubmitting(false);
+    }
   };
 
   if (loading) return <DashboardLayout role="customer"><div className="p-8">Loading...</div></DashboardLayout>;
@@ -90,6 +150,32 @@ const CustomerAppointmentDetail = () => {
                 <div className="flex items-center text-sm text-text-muted mb-4">
                   <User className="w-4 h-4 mr-1.5" /> with {app.staff?.profile?.display_name || app.staff?.name}
                 </div>
+
+                {/* Multi-service breakdown if applicable */}
+                {app.additional_services && Array.isArray(app.additional_services) && app.additional_services.length > 0 && (
+                  <div className="mb-4 rounded-xl bg-white/70 p-3 border border-purple-100">
+                    <p className="text-xs font-bold text-primary-deep uppercase mb-2">Booked Service Treatments ({app.additional_services.length + 1})</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between font-semibold">
+                        <span>{app.service_name_snapshot} (Primary)</span>
+                      </div>
+                      {app.additional_services.map((extra, idx) => (
+                        <div key={idx} className="flex justify-between text-text-muted">
+                          <span>+ {extra.name}</span>
+                          <span>{formatDuration(extra.duration_minutes)} · {formatMoney(extra.price)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {app.extended_minutes > 0 && (
+                  <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-purple-100/70 px-2.5 py-1 text-xs font-semibold text-primary-deep">
+                    <Clock className="w-3.5 h-3.5" />
+                    Extended buffer: +{app.extended_minutes} mins
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center pt-4 border-t border-gray-200">
                   <span className="text-sm font-medium text-text-muted">{formatDuration(app.service_duration_minutes_snapshot)}</span>
                   <span className="font-bold text-primary-purple text-lg">{formatMoney(app.service_price_snapshot)}</span>
@@ -192,7 +278,67 @@ const CustomerAppointmentDetail = () => {
               </div>
             </section>
 
-             <section>
+            {/* Sir Jasz: Completed appointment rating */}
+            {app.status === 'completed' && (
+              <section>
+                <h3 className="text-sm font-bold text-primary-purple uppercase tracking-wider mb-4">Service Rating & Feedback</h3>
+                <div className="rounded-2xl border border-purple-100 bg-purple-50/40 p-5">
+                  {app.review ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-green-700 bg-green-100 px-2 py-0.5 rounded">
+                          Review Submitted
+                        </span>
+                        <button 
+                          onClick={() => setShowRatingModal(true)} 
+                          className="text-xs font-bold text-primary-purple hover:underline"
+                        >
+                          Edit Review
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
+                        <div className="bg-white p-3 rounded-xl border border-purple-100">
+                          <p className="text-text-muted mb-1 font-medium">Stylist Service</p>
+                          <div className="flex items-center gap-1 text-amber-500 font-bold text-sm">
+                            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                            <span>{app.review.stylist_rating || app.review.rating || 5} / 5</span>
+                          </div>
+                        </div>
+                        <div className="bg-white p-3 rounded-xl border border-purple-100">
+                          <p className="text-text-muted mb-1 font-medium">Salon Experience</p>
+                          <div className="flex items-center gap-1 text-amber-500 font-bold text-sm">
+                            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                            <span>{app.review.shop_rating || app.review.rating || 5} / 5</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {app.review.comment && (
+                        <p className="text-xs text-text-primary italic bg-white p-3 rounded-xl border border-purple-100">
+                          "{app.review.comment}"
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-bold text-text-primary">How was your service?</p>
+                      <p className="text-xs text-text-muted mt-1 mb-4">
+                        Please take a moment to rate your hairstylist's work and your experience with Poise Hair Center.
+                      </p>
+                      <button 
+                        onClick={() => setShowRatingModal(true)}
+                        className="btn-primary w-full text-sm flex items-center justify-center gap-2"
+                      >
+                        <Star className="w-4 h-4 fill-white" /> Rate Stylist & Salon
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            <section>
               <h3 className="text-sm font-bold text-primary-purple uppercase tracking-wider mb-4">Notes & Status</h3>
               <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-4">
                 {app.customer_notes && (
@@ -221,17 +367,12 @@ const CustomerAppointmentDetail = () => {
               <section>
                 <h3 className="text-sm font-bold text-primary-purple uppercase tracking-wider mb-4">Actions</h3>
                 <div className="space-y-4">
-                  <input 
-                    type="text" 
-                    aria-label="Cancellation reason" placeholder="Cancellation reason (optional)" 
-                    value={cancelReason}
-                    onChange={e => setCancelReason(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm"
-                  />
                   <button 
-                    disabled={cancelling}
-                    onClick={handleCancel}
-                    className="w-full py-3 bg-white border-2 border-red-100 text-red-600 font-bold rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50"
+                    onClick={() => {
+                      setCancelError('');
+                      setShowCancelModal(true);
+                    }}
+                    className="w-full py-3 bg-white border-2 border-red-100 text-red-600 font-bold rounded-xl hover:bg-red-50 transition-colors"
                   >
                     Cancel Appointment
                   </button>
@@ -246,6 +387,161 @@ const CustomerAppointmentDetail = () => {
 
         </div>
       </div>
+
+      {/* Maam Jessa: Required Cancellation Reason Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="font-bold text-xl text-red-600">Cancel Appointment</h3>
+                <p className="text-xs text-text-muted mt-1">{app.appointment_number} • {app.service_name_snapshot}</p>
+              </div>
+              <button onClick={() => setShowCancelModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCancelSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-text-primary uppercase mb-1">
+                  Reason for Cancellation (Required) *
+                </label>
+                <textarea 
+                  required
+                  rows="3"
+                  value={cancelReason}
+                  onChange={e => setCancelReason(e.target.value)}
+                  placeholder="Please state why you need to cancel this appointment..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <p className="text-[11px] text-text-muted mt-1">Minimum 3 characters required. This reason will be notified to the salon admin and stylist.</p>
+              </div>
+
+              {cancelError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                  {cancelError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button 
+                  type="button" 
+                  onClick={() => setShowCancelModal(false)} 
+                  className="btn-ghost text-sm"
+                >
+                  Keep Appointment
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={cancelling || cancelReason.trim().length < 3} 
+                  className="btn-danger text-sm disabled:opacity-50"
+                >
+                  {cancelling ? 'Cancelling...' : 'Confirm Cancellation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Sir Jasz: Staff & Shop Rating Modal */}
+      {showRatingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-purple-100">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="font-bold text-xl text-text-primary">Rate Your Experience</h3>
+                <p className="text-xs text-text-muted mt-1">{app.service_name_snapshot} with {app.staff?.profile?.display_name || app.staff?.name}</p>
+              </div>
+              <button onClick={() => setShowRatingModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRatingSubmit} className="space-y-5">
+              {/* Category 1: Stylist Service */}
+              <div>
+                <label className="block text-xs font-bold text-text-primary uppercase mb-1">
+                  1. Stylist Service ({app.staff?.profile?.display_name || 'Hairstylist'}) *
+                </label>
+                <p className="text-[11px] text-text-muted mb-2">Skill, attentiveness, and quality of hair styling</p>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setStylistRating(star)}
+                      className="p-1 hover:scale-110 transition-transform"
+                    >
+                      <Star className={`w-7 h-7 ${star <= stylistRating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`} />
+                    </button>
+                  ))}
+                  <span className="text-sm font-bold text-primary-purple self-center ml-2">{stylistRating} / 5</span>
+                </div>
+              </div>
+
+              {/* Category 2: Shop & Experience */}
+              <div>
+                <label className="block text-xs font-bold text-text-primary uppercase mb-1">
+                  2. Salon Service & Poise Experience *
+                </label>
+                <p className="text-[11px] text-text-muted mb-2">Booking experience, communication, punctuality, and overall satisfaction</p>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setShopRating(star)}
+                      className="p-1 hover:scale-110 transition-transform"
+                    >
+                      <Star className={`w-7 h-7 ${star <= shopRating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`} />
+                    </button>
+                  ))}
+                  <span className="text-sm font-bold text-primary-purple self-center ml-2">{shopRating} / 5</span>
+                </div>
+              </div>
+
+              {/* Comments */}
+              <div>
+                <label className="block text-xs font-bold text-text-muted uppercase mb-1">
+                  Comments & Feedback (Optional)
+                </label>
+                <textarea 
+                  rows="3"
+                  value={reviewComment}
+                  onChange={e => setReviewComment(e.target.value)}
+                  placeholder="Share details of your experience with the stylist and the salon..."
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
+              </div>
+
+              {ratingError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                  {ratingError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button 
+                  type="button" 
+                  onClick={() => setShowRatingModal(false)} 
+                  className="btn-ghost text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={ratingSubmitting} 
+                  className="btn-primary text-sm disabled:opacity-50"
+                >
+                  {ratingSubmitting ? 'Submitting...' : 'Submit Review'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showPaymentModal && (
         <PaymentSubmissionModal 

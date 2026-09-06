@@ -152,3 +152,57 @@ table { min-width: 100%; }
 th { text-transform: none !important; letter-spacing: normal !important; font-size: .75rem !important; color: #686472 !important; }
 tbody tr { border-color: #ece9ef; }
 [class~='uppercase'][class~='tracking-wider'] { text-transform: none !important; letter-spacing: normal !important; }
+
+/* Print Styles */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .no-print,
+  nav,
+  aside,
+  header,
+  button:not(.allow-print),
+  .btn-primary,
+  .btn-secondary,
+  .btn-outline,
+  .btn-ghost,
+  .btn-danger {
+    display: none !important;
+  }
+
+  .print-block {
+    display: block !important;
+  }
+
+  .print-friendly {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #e5e7eb !important;
+    padding: 8px 12px !important;
+    color: #111827 !important;
+  }
+
+  th {
+    background-color: #f9fafb !important;
+    font-weight: 700 !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+  }
+}
+

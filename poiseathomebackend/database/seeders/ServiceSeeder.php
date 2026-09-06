@@ -19,6 +19,7 @@ class ServiceSeeder extends Seeder
         $mensCut = ServiceCategory::where('slug', 'mens-haircuts')->first();
         $color = ServiceCategory::where('slug', 'hair-coloring')->first();
         $treatment = ServiceCategory::where('slug', 'hair-treatments')->first();
+        $styling = ServiceCategory::where('slug', 'styling-updos')->first();
 
         $services = [
             [
@@ -53,12 +54,28 @@ class ServiceSeeder extends Seeder
                 'price' => 2500.00,
                 'image_path' => 'services/keratin-smoothing-treatment.jpg',
             ],
+            [
+                'category_id' => $styling?->id ?? 5,
+                'name' => 'Event Styling & Blowout',
+                'description' => 'Glamorous hair blowout and signature heat styling for special occasions.',
+                'duration_minutes' => 60,
+                'price' => 1200.00,
+                'image_path' => 'services/signature-layered-cut.jpg',
+            ],
+            [
+                'category_id' => $styling?->id ?? 5,
+                'name' => 'Formal Hair Updo',
+                'description' => 'Artfully sculpted updo ideal for weddings, galas, and formal celebrations.',
+                'duration_minutes' => 90,
+                'price' => 1800.00,
+                'image_path' => 'services/keratin-smoothing-treatment.jpg',
+            ],
         ];
 
         foreach ($services as $svc) {
             $sourcePath = database_path('seeders/assets/'.$svc['image_path']);
 
-            if (! Storage::disk('images')->exists($svc['image_path'])) {
+            if (!empty($svc['image_path']) && file_exists($sourcePath) && ! Storage::disk('images')->exists($svc['image_path'])) {
                 Storage::disk('images')->put($svc['image_path'], file_get_contents($sourcePath));
             }
 

@@ -85,6 +85,30 @@ class AdminReportController extends Controller
             'daily_activity' => $dailyActivity,
         ];
 
+        if ($request->has('format')) {
+            $summaryRows = [
+                ['metric' => 'Total Customers', 'value' => $data['total_customers']],
+                ['metric' => 'Active Staff', 'value' => $data['active_staff']],
+                ['metric' => 'Active Services Offered', 'value' => $data['active_services']],
+                ['metric' => 'Total Appointments Booked', 'value' => $data['appointments_total']],
+                ['metric' => 'Pending Appointments', 'value' => $data['appointments_pending']],
+                ['metric' => 'Confirmed Appointments', 'value' => $data['appointments_confirmed']],
+                ['metric' => 'In Progress Appointments', 'value' => $data['appointments_in_progress']],
+                ['metric' => 'Completed Appointments', 'value' => $data['appointments_completed']],
+                ['metric' => 'Cancelled Appointments', 'value' => $data['appointments_cancelled']],
+                ['metric' => 'Completed Service Value (PHP)', 'value' => number_format((float) $data['completed_service_value'], 2)],
+                ['metric' => 'Verified Payment Total (PHP)', 'value' => number_format((float) $data['verified_payment_value'], 2)],
+                ['metric' => 'Low Stock Products Alert', 'value' => $data['low_stock_products']],
+                ['metric' => 'Out of Stock Products', 'value' => $data['out_of_stock_products']],
+            ];
+            return $this->exporter->export(
+                $request->format,
+                $summaryRows,
+                ['metric' => 'Operational Metric', 'value' => 'Value / Count'],
+                'Overview Report'
+            );
+        }
+
         return response()->json(['status' => 'success', 'data' => $data]);
     }
 

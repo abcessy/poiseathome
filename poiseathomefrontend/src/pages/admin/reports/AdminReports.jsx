@@ -84,17 +84,37 @@ const AdminReports = () => {
     loadReport();
   }, [activeTab, dateRange.start_date, dateRange.end_date]);
 
-  const handleExport = (format) => {
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format) => {
     const tab = reportTabs.find(t => t.id === activeTab);
+    if (!tab) return;
     const query = new URLSearchParams({ 
       start_date: dateRange.start_date, 
       end_date: dateRange.end_date,
       format 
     });
     
-    // Perform standard redirect for download
-    const separator = tab.endpoint.includes('?') ? '&' : '?';
-    window.location.href = `${API_BASE_URL}${tab.endpoint}${separator}${query.toString()}`;
+    setExporting(true);
+    try {
+      const separator = tab.endpoint.includes('?') ? '&' : '?';
+      const endpoint = `${tab.endpoint}${separator}${query.toString()}`;
+      const res = await fetchApi(endpoint);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `poise-${tab.id}-${dateRange.start_date}_${dateRange.end_date}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      await messageDialog('The report export failed. Please check your connection and try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handlePrint = () => {
@@ -141,12 +161,20 @@ const AdminReports = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 no-print">
           <div><h1 className="page-title">Reports & Analytics</h1><p className="mt-2 text-sm text-text-muted">Filter, review, and export operational reports.</p></div>
           <div className="flex flex-wrap gap-2">
-            {activeTab !== 'overview' && <button onClick={() => handleExport('csv')} className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-text-primary hover:bg-gray-50 flex items-center text-sm font-medium">
-              <Download className="w-4 h-4 mr-2" /> CSV
-            </button>}
-            {activeTab !== 'overview' && <button onClick={() => handleExport('pdf')} className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-text-primary hover:bg-gray-50 flex items-center text-sm font-medium">
-              <Download className="w-4 h-4 mr-2" /> PDF
-            </button>}
+            <button 
+              disabled={exporting} 
+              onClick={() => handleExport('csv')} 
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-text-primary hover:bg-gray-50 flex items-center text-sm font-medium disabled:opacity-50"
+            >
+              <Download className="w-4 h-4 mr-2" /> {exporting ? 'Exporting...' : 'CSV'}
+            </button>
+            <button 
+              disabled={exporting} 
+              onClick={() => handleExport('pdf')} 
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-text-primary hover:bg-gray-50 flex items-center text-sm font-medium disabled:opacity-50"
+            >
+              <Download className="w-4 h-4 mr-2" /> {exporting ? 'Exporting...' : 'PDF'}
+            </button>
             <button onClick={handlePrint} className="px-4 py-2 bg-primary-purple text-white rounded-lg hover:bg-primary-deep flex items-center text-sm font-bold">
               <Printer className="w-4 h-4 mr-2" /> Print
             </button>

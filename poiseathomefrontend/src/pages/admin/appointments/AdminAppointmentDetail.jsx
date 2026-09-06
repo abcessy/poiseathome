@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { fetchApi } from '../../../services/api';
 import DashboardLayout from '../../../layouts/DashboardLayout';
 import { StatusBadge } from '../../customer/appointments/CustomerAppointments';
-import { ArrowLeft, User } from 'lucide-react';
+import { ArrowLeft, User, Clock, X } from 'lucide-react';
 import { formatMoney } from '../../../utils/formatters';
 import { useAppDialog } from '../../../context/AppDialogContext';
 
@@ -16,8 +16,18 @@ const AdminAppointmentDetail = () => {
   const [qualifiedStaff, setQualifiedStaff] = useState([]);
   const [usages, setUsages] = useState([]);
   const [reassigning, setReassigning] = useState(false);
+  
+  // Cancellation state
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState('');
+
+  // Extend time state
+  const [extending, setExtending] = useState(false);
+  const [extendMinutes, setExtendMinutes] = useState(15);
+  const [extendReason, setExtendReason] = useState('');
+  const [extendLoading, setExtendLoading] = useState(false);
+
   const { confirmDialog, messageDialog } = useAppDialog();
 
   useEffect(() => {
@@ -77,14 +87,53 @@ const AdminAppointmentDetail = () => {
   };
 
   const cancelAppointment = async () => {
+    if (!cancelReason.trim() || cancelReason.trim().length < 3) {
+      setCancelError('Please enter a cancellation reason (minimum 3 characters required).');
+      return;
+    }
+    setCancelError('');
     try {
       const res = await fetchApi(`/admin/appointments/${id}/cancel`, {
         method: 'PATCH',
-        body: JSON.stringify({ reason: cancelReason.trim() || 'Cancelled by admin' })
+        body: JSON.stringify({ reason: cancelReason.trim() })
       });
-      if (res.ok) { setCancelling(false); setCancelReason(''); loadApp(); }
-      else await messageDialog((await res.json()).message || 'The appointment could not be cancelled.');
-    } catch(e) {}
+      if (res.ok) { 
+        setCancelling(false); 
+        setCancelReason(''); 
+        loadApp(); 
+      } else {
+        const err = await res.json();
+        setCancelError(err.message || 'The appointment could not be cancelled.');
+      }
+    } catch(e) {
+      setCancelError('Network error while cancelling appointment.');
+    }
+  };
+
+  const handleExtendTime = async (e) => {
+    e.preventDefault();
+    setExtendLoading(true);
+    try {
+      const res = await fetchApi(`/admin/appointments/${id}/extend-time`, {
+        method: 'POST',
+        body: JSON.stringify({
+          minutes: Number(extendMinutes),
+          reason: extendReason.trim() || null
+        })
+      });
+      if (res.ok) {
+        setExtending(false);
+        setExtendReason('');
+        loadApp();
+      } else {
+        const err = await res.json();
+        await messageDialog(err.message || 'Could not extend appointment duration.');
+      }
+    } catch (e) {
+      await messageDialog('Network error while extending appointment duration.');
+    } finally {
+      setExtendLoading(false);
+    }
   };
 
   const reassignStaff = async (staffId) => {
@@ -130,9 +179,32 @@ const AdminAppointmentDetail = () => {
               <div className="bg-gray-50 p-4 rounded-xl text-sm space-y-2 border border-gray-100">
                 <p><span className="font-semibold w-24 inline-block">Customer:</span> {app.customer_name_snapshot}</p>
                 <p><span className="font-semibold w-24 inline-block">Contact:</span> {app.customer_contact_snapshot || 'N/A'}</p>
-                <p><span className="font-semibold w-24 inline-block">Service ID:</span> {app.service_id}</p>
-                <p><span className="font-semibold w-24 inline-block">Price:</span> {formatMoney(app.service_price_snapshot)}</p>
-                <p><span className="font-semibold w-24 inline-block">Duration:</span> {app.service_duration_minutes_snapshot} min</p>
+                <p><span className="font-semibold w-24 inline-block">Primary:</span> {app.service_name_snapshot}</p>
+                
+                {app.additional_services && Array.isArray(app.additional_services) && app.additional_services.length > 0 && (
+                  <div className="pt-2 border-t border-gray-200">
+                    <p className="font-semibold text-xs text-primary-deep uppercase mb-1">Additional Items:</p>
+                    <div className="space-y-1 text-xs text-text-muted pl-2">
+                      {app.additional_services.map((item, idx) => (
+                        <div key={idx} className="flex justify-between">
+                          <span>• {item.name}</span>
+                          <span>{item.duration_minutes}m · {formatMoney(item.price)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {app.extended_minutes > 0 && (
+                  <p className="pt-2 border-t border-gray-200 text-xs text-primary-deep font-semibold">
+                    <span className="font-semibold w-24 inline-block">Extended:</span> +{app.extended_minutes} minutes
+                  </p>
+                )}
+
+                <div className="pt-2 border-t border-gray-200 flex justify-between font-medium">
+                  <span>Total Duration: {app.service_duration_minutes_snapshot} min</span>
+                  <span className="font-bold text-primary-purple">{formatMoney(app.service_price_snapshot)}</span>
+                </div>
               </div>
             </div>
 
@@ -217,12 +289,45 @@ const AdminAppointmentDetail = () => {
                 {app.status === 'pending' && <button onClick={() => updateStatus('confirmed')} disabled={app.payment_summary?.payment_state !== 'paid' && app.payment_summary?.payment_state !== 'partially_paid'} className="px-4 py-2 bg-blue-100 text-blue-700 text-sm font-bold rounded-lg hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed">Confirm</button>}
                 {app.status === 'confirmed' && <button onClick={() => updateStatus('in_progress')} className="px-4 py-2 bg-purple-100 text-purple-700 text-sm font-bold rounded-lg hover:bg-purple-200">Start Service</button>}
                 {app.status === 'in_progress' && <button onClick={() => updateStatus('completed')} className="px-4 py-2 bg-green-100 text-green-700 text-sm font-bold rounded-lg hover:bg-green-200">Complete</button>}
+                
+                {/* Sir Prado: Extend-Time Action */}
                 {!['completed', 'cancelled'].includes(app.status) && (
-                  <button onClick={() => setCancelling(true)} className="px-4 py-2 bg-white border border-red-200 text-red-600 text-sm font-bold rounded-lg hover:bg-red-50 ml-auto">Cancel Appointment</button>
+                  <button 
+                    onClick={() => setExtending(true)} 
+                    className="px-4 py-2 bg-purple-100/70 border border-purple-200 text-primary-deep text-sm font-bold rounded-lg hover:bg-purple-200 flex items-center gap-1.5"
+                  >
+                    <Clock className="w-4 h-4" /> Extend Time
+                  </button>
+                )}
+
+                {!['completed', 'cancelled'].includes(app.status) && (
+                  <button onClick={() => { setCancelling(true); setCancelError(''); }} className="px-4 py-2 bg-white border border-red-200 text-red-600 text-sm font-bold rounded-lg hover:bg-red-50 ml-auto">Cancel Appointment</button>
                 )}
                 {['completed', 'cancelled'].includes(app.status) && <p className="text-sm text-text-muted">No actions available.</p>}
               </div>
-              {cancelling && <div className="mt-3 rounded-xl border border-red-100 bg-red-50 p-4"><label className="block text-sm font-semibold text-red-900">Cancellation reason</label><textarea value={cancelReason} onChange={event => setCancelReason(event.target.value)} rows="3" className="mt-2 w-full bg-white p-3" placeholder="Explain why this appointment is being cancelled" /><div className="mt-3 flex justify-end gap-2"><button onClick={() => { setCancelling(false); setCancelReason(''); }} className="btn-outline">Keep appointment</button><button onClick={cancelAppointment} className="btn-primary bg-red-700 hover:bg-red-800">Confirm cancellation</button></div></div>}
+              
+              {/* Maam Jessa: Required Cancellation Reason */}
+              {cancelling && (
+                <div className="mt-3 rounded-xl border border-red-100 bg-red-50 p-4">
+                  <label className="block text-sm font-semibold text-red-900">
+                    Cancellation reason (Required) *
+                  </label>
+                  <textarea 
+                    value={cancelReason} 
+                    onChange={event => setCancelReason(event.target.value)} 
+                    rows="3" 
+                    className="mt-2 w-full bg-white p-3 border border-red-200 rounded-lg text-sm" 
+                    placeholder="Enter reason for cancelling this appointment (min 3 chars)..." 
+                  />
+                  {cancelError && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{cancelError}</p>
+                  )}
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button onClick={() => { setCancelling(false); setCancelReason(''); setCancelError(''); }} className="btn-outline">Keep appointment</button>
+                    <button onClick={cancelAppointment} disabled={cancelReason.trim().length < 3} className="btn-primary bg-red-700 hover:bg-red-800 disabled:opacity-50">Confirm cancellation</button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -270,6 +375,67 @@ const AdminAppointmentDetail = () => {
 
         </div>
       </div>
+
+      {/* Sir Prado: Admin Extend Time Modal */}
+      {extending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="font-bold text-xl text-text-primary">Extend Appointment Duration</h3>
+                <p className="text-xs text-text-muted mt-0.5">{app.appointment_number} • {app.service_name_snapshot}</p>
+              </div>
+              <button onClick={() => setExtending(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExtendTime} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-text-muted uppercase mb-1.5">
+                  Select Additional Minutes *
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[15, 30, 45, 60].map(mins => (
+                    <button
+                      key={mins}
+                      type="button"
+                      onClick={() => setExtendMinutes(mins)}
+                      className={`py-2 rounded-lg text-xs font-bold transition ${extendMinutes === mins ? 'bg-primary-purple text-white shadow-sm' : 'bg-gray-50 border border-gray-200 text-text-primary hover:border-primary-purple'}`}
+                    >
+                      +{mins} min
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-muted uppercase mb-1">
+                  Reason / Notes for Extension (Optional)
+                </label>
+                <textarea 
+                  rows="2"
+                  value={extendReason}
+                  onChange={e => setExtendReason(e.target.value)}
+                  placeholder="e.g. Detailed color correction required, client requested additional time..."
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
+              </div>
+
+              <div className="p-3 bg-purple-50/60 rounded-xl text-xs text-primary-deep">
+                <p>Extending will adjust the scheduled end time and verify no conflict exists with subsequent bookings for the stylist.</p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button type="button" onClick={() => setExtending(false)} className="btn-ghost text-sm">Cancel</button>
+                <button type="submit" disabled={extendLoading} className="btn-primary text-sm disabled:opacity-50">
+                  {extendLoading ? 'Extending...' : 'Confirm Extension'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 };

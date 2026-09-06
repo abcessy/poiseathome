@@ -10,11 +10,27 @@ use Carbon\Carbon;
 
 class AppointmentAvailabilityService
 {
-    public function getAvailableSlots(Service $service, User $staff, $dateString)
+    public function getSystemHandlingCapacity(): int
+    {
+        $configured = (int) config('poiseathome.booking.max_concurrent_appointments', 0);
+        if ($configured > 0) {
+            return $configured;
+        }
+
+        $activeStaffCount = User::where('role', 'staff')
+            ->where('is_active', true)
+            ->whereHas('profile', fn ($q) => $q->where('is_available', true))
+            ->count();
+
+        return max($activeStaffCount, 1);
+    }
+
+    public function getAvailableSlots(Service $service, User $staff, $dateString, int $customDuration = 0)
     {
         // 1. Validate Date
-        $date = Carbon::parse($dateString, config('app.timezone'));
-        $now = Carbon::now(config('app.timezone'));
+        $tz = config('app.timezone', 'Asia/Manila');
+        $date = Carbon::parse($dateString, $tz);
+        $now = Carbon::now($tz);
         
         $minNotice = (int) config('poiseathome.booking.minimum_notice_hours', 2);
         $maxAdvance = (int) config('poiseathome.booking.maximum_advance_days', 60);
@@ -40,16 +56,18 @@ class AppointmentAvailabilityService
         $profile = $staff->profile;
         $opening = $profile?->working_start_time ?: config('poiseathome.booking.opening_time', '09:00');
         $closing = $profile?->working_end_time ?: config('poiseathome.booking.closing_time', '18:00');
-        $openingTime = Carbon::parse($date->format('Y-m-d') . ' ' . $opening, config('app.timezone'));
-        $closingTime = Carbon::parse($date->format('Y-m-d') . ' ' . $closing, config('app.timezone'));
+        $openingTime = Carbon::parse($date->format('Y-m-d') . ' ' . $opening, $tz);
+        $closingTime = Carbon::parse($date->format('Y-m-d') . ' ' . $closing, $tz);
         $interval = (int) config('poiseathome.booking.slot_interval_minutes', 30);
-        $duration = (int) $service->duration_minutes;
+        $duration = $customDuration > 0 ? $customDuration : (int) $service->duration_minutes;
 
-        // 4. Fetch Existing Appointments
-        $existingAppointments = Appointment::where('staff_user_id', $staff->id)
-            ->whereDate('appointment_date', $date->format('Y-m-d'))
+        // 4. Fetch Existing Appointments and System Capacity
+        $allDayAppointments = Appointment::whereDate('appointment_date', $date->format('Y-m-d'))
             ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
-            ->get(['start_time', 'end_time']);
+            ->get(['staff_user_id', 'start_time', 'end_time']);
+
+        $staffAppointments = $allDayAppointments->where('staff_user_id', $staff->id);
+        $systemCapacity = $this->getSystemHandlingCapacity();
 
         $slots = [];
         $current = $openingTime->clone();
@@ -68,16 +86,31 @@ class AppointmentAvailabilityService
                 continue;
             }
 
-            // Check Overlaps
+            // Check Stylist Overlaps
             $conflict = false;
-            foreach ($existingAppointments as $app) {
-                $appStart = Carbon::parse($date->format('Y-m-d') . ' ' . $app->start_time);
-                $appEnd = Carbon::parse($date->format('Y-m-d') . ' ' . $app->end_time);
+            foreach ($staffAppointments as $app) {
+                $appStart = Carbon::parse($date->format('Y-m-d') . ' ' . $app->start_time, $tz);
+                $appEnd = Carbon::parse($date->format('Y-m-d') . ' ' . $app->end_time, $tz);
 
                 // existing_start < requested_end AND existing_end > requested_start
                 if ($appStart->lt($slotEnd) && $appEnd->gt($slotStart)) {
                     $conflict = true;
                     break;
+                }
+            }
+
+            // Check System Handling Capacity
+            if (!$conflict) {
+                $overlappingCount = 0;
+                foreach ($allDayAppointments as $app) {
+                    $appStart = Carbon::parse($date->format('Y-m-d') . ' ' . $app->start_time, $tz);
+                    $appEnd = Carbon::parse($date->format('Y-m-d') . ' ' . $app->end_time, $tz);
+                    if ($appStart->lt($slotEnd) && $appEnd->gt($slotStart)) {
+                        $overlappingCount++;
+                    }
+                }
+                if ($overlappingCount >= $systemCapacity) {
+                    $conflict = true;
                 }
             }
 

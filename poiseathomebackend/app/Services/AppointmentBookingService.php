@@ -21,18 +21,26 @@ class AppointmentBookingService
         $this->notificationService = $notificationService;
     }
 
-    public function createAppointment($customerId, $serviceId, $staffId, $date, $startTime, $address, $addressNotes = null, $customerNotes = null)
+    public function createAppointment($customerId, $serviceId, $staffId, $date, $startTime, $address, $addressNotes = null, $customerNotes = null, $extendedMinutes = 0)
     {
-        $appointment = DB::transaction(function () use ($customerId, $serviceId, $staffId, $date, $startTime, $address, $addressNotes, $customerNotes) {
-            
-            $service = Service::where('id', $serviceId)
+        $appointment = DB::transaction(function () use ($customerId, $serviceId, $staffId, $date, $startTime, $address, $addressNotes, $customerNotes, $extendedMinutes) {
+            $tz = config('app.timezone', 'Asia/Manila');
+            $serviceIds = is_array($serviceId) ? array_unique($serviceId) : [$serviceId];
+
+            $services = Service::whereIn('id', $serviceIds)
                 ->where('is_active', true)
                 ->where('is_home_service', true)
                 ->whereHas('category', fn ($query) => $query->where('is_active', true))
-                ->first();
-            if (!$service) {
-                throw new Exception("Service not found, inactive, or not available for home service.");
+                ->get();
+
+            if ($services->count() !== count($serviceIds) || $services->isEmpty()) {
+                throw new Exception("One or more selected services are unavailable, inactive, or not offered for home service.");
             }
+
+            $primaryService = $services->first();
+            $totalDuration = (int) $services->sum('duration_minutes') + max(0, (int) $extendedMinutes);
+            $totalPrice = (float) $services->sum('price');
+            $serviceNameSnapshot = $services->pluck('name')->implode(' + ');
 
             // Lock staff row to serialize concurrent bookings for same staff
             $staff = User::where('id', $staffId)->where('role', 'staff')->where('is_active', true)->lockForUpdate()->first();
@@ -40,23 +48,54 @@ class AppointmentBookingService
                 throw new Exception("Hairstylist not available.");
             }
 
-            // Check Qualification
-            if (!$staff->services()->where('service_id', $service->id)->exists()) {
-                throw new Exception("Hairstylist not qualified for this service.");
+            // Check Qualification for all services
+            $qualifiedCount = $staff->services()->whereIn('service_id', $serviceIds)->count();
+            if ($qualifiedCount !== count($serviceIds)) {
+                throw new Exception("Selected hairstylist is not qualified for all selected services.");
             }
 
-            // Double check slots
-            $slots = $this->availabilityService->getAvailableSlots($service, $staff, $date);
-            $validSlot = collect($slots)->firstWhere('start', Carbon::parse($startTime)->format('H:i'));
+            // Calculate start and end times
+            $slotStart = Carbon::parse($date . ' ' . $startTime, $tz);
+            $slotEnd = $slotStart->copy()->addMinutes($totalDuration);
+
+            // Double check candidate slots with availability service
+            $slots = $this->availabilityService->getAvailableSlots($primaryService, $staff, $date, $totalDuration);
+            $validSlot = collect($slots)->firstWhere('start', $slotStart->format('H:i'));
 
             if (!$validSlot) {
                 throw new Exception("This appointment time is no longer available.", 409); // 409 Conflict
             }
 
+            // Lock and verify staff does not have overlapping appointments
+            $hasStaffConflict = Appointment::where('staff_user_id', $staff->id)
+                ->whereDate('appointment_date', $date)
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->where('start_time', '<', $slotEnd->format('H:i:s'))
+                ->where('end_time', '>', $slotStart->format('H:i:s'))
+                ->lockForUpdate()
+                ->exists();
+
+            if ($hasStaffConflict) {
+                throw new Exception("This hairstylist is no longer available for the selected time slot.", 409);
+            }
+
+            // Check system-wide handling capacity with lock
+            $systemCapacity = $this->availabilityService->getSystemHandlingCapacity();
+            $concurrentAppointments = Appointment::whereDate('appointment_date', $date)
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->where('start_time', '<', $slotEnd->format('H:i:s'))
+                ->where('end_time', '>', $slotStart->format('H:i:s'))
+                ->lockForUpdate()
+                ->count();
+
+            if ($concurrentAppointments >= $systemCapacity) {
+                throw new Exception("The salon's maximum appointment capacity for this time slot has been reached. Please select another slot.", 409);
+            }
+
             $customer = User::findOrFail($customerId);
 
             // Allocate the yearly sequence while holding a database row lock.
-            $year = Carbon::parse($date, config('app.timezone'))->year;
+            $year = Carbon::parse($date, $tz)->year;
             DB::table('appointment_number_sequences')->insertOrIgnore([
                 'year' => $year,
                 'last_number' => 0,
@@ -72,20 +111,29 @@ class AppointmentBookingService
             $appointmentNumber = 'PAH-' . $year . '-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
             
             $percentage = (string) config('poiseathome.payment.downpayment_percentage', 30);
-            $priceInCents = (int) round(((float) $service->price) * 100);
+            $priceInCents = (int) round($totalPrice * 100);
             $requiredDownpayment = round($priceInCents * (float) $percentage / 100) / 100;
+
+            $additionalServicesData = $services->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'price' => (float) $s->price,
+                'duration_minutes' => (int) $s->duration_minutes,
+            ])->values()->toArray();
 
             $appointment = Appointment::create([
                 'appointment_number' => $appointmentNumber,
                 'customer_id' => $customer->id,
                 'staff_user_id' => $staff->id,
-                'service_id' => $service->id,
+                'service_id' => $primaryService->id,
                 'appointment_date' => $date,
-                'start_time' => $validSlot['start'],
-                'end_time' => $validSlot['end'],
-                'service_name_snapshot' => $service->name,
-                'service_price_snapshot' => $service->price,
-                'service_duration_minutes_snapshot' => $service->duration_minutes,
+                'start_time' => $slotStart->format('H:i:s'),
+                'end_time' => $slotEnd->format('H:i:s'),
+                'service_name_snapshot' => $serviceNameSnapshot,
+                'service_price_snapshot' => $totalPrice,
+                'service_duration_minutes_snapshot' => $totalDuration,
+                'extended_minutes' => max(0, (int) $extendedMinutes),
+                'additional_services' => $additionalServicesData,
                 'customer_name_snapshot' => $customer->name,
                 'customer_contact_snapshot' => $customer->contact_number,
                 'required_downpayment_amount' => $requiredDownpayment,

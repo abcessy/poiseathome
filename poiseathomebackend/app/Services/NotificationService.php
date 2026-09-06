@@ -66,22 +66,35 @@ class NotificationService
 
     public function notifyAppointmentCancellation($appointment)
     {
-        $this->notifyUser($appointment->customer, [
-            'type' => 'appointment_cancelled',
-            'title' => 'Appointment Cancelled',
-            'message' => 'Your appointment ' . $appointment->appointment_number . ' has been cancelled.',
-            'reference_type' => 'appointment',
-            'reference_code' => $appointment->appointment_number,
-        ]);
+        $reason = $appointment->cancellation_reason ? " Reason: {$appointment->cancellation_reason}." : '';
+
+        if ($appointment->customer) {
+            $this->notifyUser($appointment->customer, [
+                'type' => 'appointment_cancelled',
+                'title' => 'Appointment Cancelled',
+                'message' => 'Your appointment ' . $appointment->appointment_number . ' has been cancelled.' . $reason,
+                'reference_type' => 'appointment',
+                'reference_code' => $appointment->appointment_number,
+            ]);
+        }
 
         if ($appointment->staff) {
             $this->notifyStaff($appointment->staff, [
                 'type' => 'appointment_cancelled',
                 'title' => 'Appointment Cancelled',
-                'message' => 'Appointment ' . $appointment->appointment_number . ' has been cancelled.',
+                'message' => 'Appointment ' . $appointment->appointment_number . ' has been cancelled.' . $reason,
                 'reference_type' => 'appointment',
                 'reference_id' => $appointment->id,
             ]);
         }
+
+        // Route cancellation notifications to the admin, not just the staff.
+        $this->notifyAdmins([
+            'type' => 'appointment_cancelled',
+            'title' => 'Appointment Cancelled',
+            'message' => 'Appointment ' . $appointment->appointment_number . ' was cancelled.' . $reason,
+            'reference_type' => 'appointment',
+            'reference_id' => $appointment->id,
+        ]);
     }
 }

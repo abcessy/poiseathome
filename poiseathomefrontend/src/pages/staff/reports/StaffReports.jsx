@@ -36,14 +36,35 @@ const StaffReports = () => {
     } catch(e) {} finally { setLoading(false); }
   };
 
-  const handleExport = (format) => {
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format) => {
     const tab = tabs.find(t => t.id === activeTab);
+    if (!tab) return;
     const query = new URLSearchParams({ 
       start_date: dateRange.start_date, 
       end_date: dateRange.end_date,
       format 
     });
-    window.location.href = `${API_BASE_URL}${tab.endpoint}?${query.toString()}`;
+    
+    setExporting(true);
+    try {
+      const res = await fetchApi(`${tab.endpoint}?${query.toString()}`);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `staff-${tab.id}-${dateRange.start_date}_${dateRange.end_date}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('The report export failed. Please check your connection and try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handlePrint = () => {
@@ -88,11 +109,19 @@ const StaffReports = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 no-print">
           <div><h1 className="page-title">My Reports</h1><p className="mt-2 text-sm text-text-muted">Review your completed work and product usage.</p></div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => handleExport('csv')} className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-text-primary hover:bg-gray-50 flex items-center text-sm font-medium">
-              <Download className="w-4 h-4 mr-2" /> CSV
+            <button 
+              disabled={exporting} 
+              onClick={() => handleExport('csv')} 
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-text-primary hover:bg-gray-50 flex items-center text-sm font-medium disabled:opacity-50"
+            >
+              <Download className="w-4 h-4 mr-2" /> {exporting ? 'Exporting...' : 'CSV'}
             </button>
-            <button onClick={() => handleExport('pdf')} className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-text-primary hover:bg-gray-50 flex items-center text-sm font-medium">
-              <Download className="w-4 h-4 mr-2" /> PDF
+            <button 
+              disabled={exporting} 
+              onClick={() => handleExport('pdf')} 
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-text-primary hover:bg-gray-50 flex items-center text-sm font-medium disabled:opacity-50"
+            >
+              <Download className="w-4 h-4 mr-2" /> {exporting ? 'Exporting...' : 'PDF'}
             </button>
             <button onClick={handlePrint} className="px-4 py-2 bg-primary-purple text-white rounded-lg hover:bg-primary-deep flex items-center text-sm font-bold">
               <Printer className="w-4 h-4 mr-2" /> Print

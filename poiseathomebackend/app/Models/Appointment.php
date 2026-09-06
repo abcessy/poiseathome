@@ -18,6 +18,8 @@ class Appointment extends Model
         'service_price_snapshot',
         'required_downpayment_amount',
         'service_duration_minutes_snapshot',
+        'extended_minutes',
+        'additional_services',
         'customer_name_snapshot',
         'customer_contact_snapshot',
         'service_address',
@@ -39,6 +41,8 @@ class Appointment extends Model
             'appointment_date' => 'date',
             'service_price_snapshot' => 'decimal:2',
             'required_downpayment_amount' => 'decimal:2',
+            'extended_minutes' => 'integer',
+            'additional_services' => 'array',
             'cancelled_at' => 'datetime',
             'confirmed_at' => 'datetime',
             'started_at' => 'datetime',
@@ -74,5 +78,10 @@ class Appointment extends Model
     public function productUsages()
     {
         return $this->hasMany(AppointmentProductUsage::class);
+    }
+
+    public function review()
+    {
+        return $this->hasOne(CustomerReview::class);
     }
 }

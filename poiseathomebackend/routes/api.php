@@ -113,6 +113,7 @@ Route::prefix('v1')->group(function () {
             Route::patch('/appointments/{appointment}/status', [\App\Http\Controllers\AdminAppointmentController::class, 'updateStatus']);
             Route::patch('/appointments/{appointment}/staff', [\App\Http\Controllers\AdminAppointmentController::class, 'reassignStaff']);
             Route::patch('/appointments/{appointment}/cancel', [\App\Http\Controllers\AdminAppointmentController::class, 'cancel']);
+            Route::post('/appointments/{appointment}/extend-time', [\App\Http\Controllers\AdminAppointmentController::class, 'extendTime']);
             Route::get('/appointments/{appointment}/product-usages', [AppointmentProductUsageController::class, 'index']);
             Route::post('/appointments/{appointment}/product-usages/{usage}/reverse', [AppointmentProductUsageController::class, 'reverse']);
 
@@ -156,9 +157,16 @@ Route::prefix('v1')->group(function () {
             Route::get('/appointments', [\App\Http\Controllers\StaffAppointmentController::class, 'index']);
             Route::get('/appointments/{appointment}', [\App\Http\Controllers\StaffAppointmentController::class, 'show']);
             Route::patch('/appointments/{appointment}/status', [\App\Http\Controllers\StaffAppointmentController::class, 'updateStatus']);
+            Route::patch('/appointments/{appointment}/cancel', [\App\Http\Controllers\StaffAppointmentController::class, 'cancel']);
+            Route::post('/appointments/{appointment}/extend-time', [\App\Http\Controllers\StaffAppointmentController::class, 'extendTime']);
             
             // Phase 6: Staff Inventory & Usage
             Route::get('/inventory', [StaffInventoryController::class, 'index']);
+            Route::get('/inventory/{product}', [StaffInventoryController::class, 'show']);
+            Route::post('/inventory/{product}/stock-in', [StaffInventoryController::class, 'stockIn']);
+            Route::post('/inventory/{product}/stock-out', [StaffInventoryController::class, 'stockOut']);
+            Route::post('/inventory/{product}/adjust', [StaffInventoryController::class, 'adjust']);
+            Route::get('/inventory/{product}/movements', [StaffInventoryController::class, 'movements']);
             Route::get('/appointments/{appointment}/product-usages', [AppointmentProductUsageController::class, 'index']);
             Route::post('/appointments/{appointment}/product-usages', [AppointmentProductUsageController::class, 'store']);
             Route::post('/appointments/{appointment}/product-usages/{usage}/reverse', [AppointmentProductUsageController::class, 'reverse']);
@@ -168,6 +176,7 @@ Route::prefix('v1')->group(function () {
         Route::middleware('role:customer')->group(function () {
             Route::get('/customer/review', [CustomerReviewController::class, 'customerContext']);
             Route::put('/customer/review', [CustomerReviewController::class, 'upsert']);
+            Route::post('/customer/appointments/{appointment}/review', [CustomerReviewController::class, 'rateAppointment']);
             Route::get('/customer/address', [CustomerAddressController::class, 'show']);
             Route::put('/customer/address', [CustomerAddressController::class, 'update']);
             Route::delete('/customer/address', [CustomerAddressController::class, 'destroy']);

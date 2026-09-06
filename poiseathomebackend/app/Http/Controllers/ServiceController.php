@@ -35,7 +35,12 @@ class ServiceController extends Controller
 
     public function publicShow($slug)
     {
-        $service = Service::where('slug', $slug)
+        $service = Service::where(function ($q) use ($slug) {
+                $q->where('slug', $slug);
+                if (is_numeric($slug)) {
+                    $q->orWhere('id', (int) $slug);
+                }
+            })
             ->where('is_active', true)
             ->whereHas('category', function($q) {
                 $q->where('is_active', true);
@@ -47,14 +52,14 @@ class ServiceController extends Controller
             }])
             ->firstOrFail();
 
-        // format staff response safely
         $staff = $service->qualifiedStaff->map(function($user) {
             return [
                 'id' => $user->id,
                 'name' => $user->profile?->display_name ?? $user->name,
                 'specialization' => $user->profile?->specialization,
-                'profile_photo_path' => $user->profile?->profile_photo_path,
-                'is_available' => $user->profile?->is_available ?? false,
+                'profile_photo_url' => $user->profile?->profile_photo_path 
+                    ? Storage::disk('images')->url($user->profile->profile_photo_path) 
+                    : null,
             ];
         });
 
@@ -80,10 +85,17 @@ class ServiceController extends Controller
             'duration_minutes' => 'required|integer|min:1',
             'price' => 'required|numeric|min:0',
             'image' => 'nullable|image|mimes:jpeg,png,webp|max:5120',
-            'is_home_service' => 'boolean',
-            'is_active' => 'boolean',
+            'is_home_service' => 'nullable',
+            'is_active' => 'nullable',
             'sort_order' => 'integer',
         ]);
+
+        $validated['is_home_service'] = $request->has('is_home_service')
+            ? filter_var($request->is_home_service, FILTER_VALIDATE_BOOLEAN)
+            : true;
+        $validated['is_active'] = $request->has('is_active')
+            ? filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN)
+            : true;
 
         $validated['slug'] = Str::slug($validated['name']);
         if (Service::where('slug', $validated['slug'])->exists()) {
@@ -112,10 +124,17 @@ class ServiceController extends Controller
             'duration_minutes' => 'required|integer|min:1',
             'price' => 'required|numeric|min:0',
             'image' => 'nullable|image|mimes:jpeg,png,webp|max:5120',
-            'is_home_service' => 'boolean',
-            'is_active' => 'boolean',
+            'is_home_service' => 'nullable',
+            'is_active' => 'nullable',
             'sort_order' => 'integer',
         ]);
+
+        if ($request->has('is_home_service')) {
+            $validated['is_home_service'] = filter_var($request->is_home_service, FILTER_VALIDATE_BOOLEAN);
+        }
+        if ($request->has('is_active')) {
+            $validated['is_active'] = filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN);
+        }
 
         if ($service->name !== $validated['name']) {
             $validated['slug'] = Str::slug($validated['name']);
@@ -137,9 +156,17 @@ class ServiceController extends Controller
 
     public function destroy(Service $service)
     {
+        if ($service->appointments()->exists()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This service cannot be deleted because it has recorded appointments. You can deactivate it instead.'
+            ], 422);
+        }
+
         if ($service->image_path) {
             Storage::disk('images')->delete($service->image_path);
         }
+        $service->qualifiedStaff()->detach();
         $service->delete();
         return response()->json(['status' => 'success']);
     }
