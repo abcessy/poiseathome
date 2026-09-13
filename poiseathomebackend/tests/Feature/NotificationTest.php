@@ -61,7 +61,7 @@ class NotificationTest extends TestCase
         $res = $this->postJson('/api/v1/appointments', [
             'service_id' => $s->id,
             'staff_id' => $this->staff->id,
-            'date' => '2026-09-01',
+            'date' => now()->addDays(2)->format('Y-m-d'),
             'start_time' => '10:00',
             'service_address' => '123 Test St',
         ]);

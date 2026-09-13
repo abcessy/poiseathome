@@ -49,17 +49,16 @@ class AppointmentTest extends TestCase
         ]);
 
         $response->assertStatus(201);
-        $this->assertDatabaseHas('appointments', [
-            'customer_id' => $this->customer->id,
-            'service_id' => $this->service->id,
-            'staff_user_id' => $this->staff->id,
-            'appointment_date' => $date,
-            'start_time' => '10:00:00',
-            'end_time' => '11:00:00', // 60 mins later
-            'status' => 'pending',
-            'service_price_snapshot' => 500.00,
-            'service_address' => '123 Main St',
-        ]);
+        $appointment = Appointment::where('customer_id', $this->customer->id)->first();
+        $this->assertNotNull($appointment);
+        $this->assertEquals($this->service->id, $appointment->service_id);
+        $this->assertEquals($this->staff->id, $appointment->staff_user_id);
+        $this->assertEquals($date, \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d'));
+        $this->assertTrue(str_starts_with($appointment->start_time, '10:00'));
+        $this->assertTrue(str_starts_with($appointment->end_time, '11:00'));
+        $this->assertEquals('pending', $appointment->status);
+        $this->assertEquals(500.00, (float) $appointment->service_price_snapshot);
+        $this->assertEquals('123 Main St', $appointment->service_address);
     }
 
     public function test_availability_uses_staff_working_hours()
@@ -88,11 +87,9 @@ class AppointmentTest extends TestCase
             'working_end_time' => '17:30',
         ])->assertOk();
 
-        $this->assertDatabaseHas('staff_profiles', [
-            'user_id' => $this->staff->id,
-            'working_start_time' => '10:00:00',
-            'working_end_time' => '17:30:00',
-        ]);
+        $profile = $this->staff->fresh()->profile;
+        $this->assertTrue(str_starts_with($profile->working_start_time, '10:00'));
+        $this->assertTrue(str_starts_with($profile->working_end_time, '17:30'));
     }
 
     public function test_overlapping_appointments_are_rejected()

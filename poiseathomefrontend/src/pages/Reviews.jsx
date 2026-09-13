@@ -106,11 +106,11 @@ const Reviews = () => {
             <div className="mt-4 grid grid-cols-2 gap-2 border-t border-white/15 pt-3 text-xs">
               <div>
                 <span className="text-white/60 block">Stylist Service:</span>
-                <span className="font-bold text-fuchsia-200">{summary.average_stylist || summary.average} / 5</span>
+                <span className="font-bold text-fuchsia-200">{summary.stylist_average || summary.average_stylist || summary.average} / 5</span>
               </div>
               <div>
                 <span className="text-white/60 block">Shop & Salon:</span>
-                <span className="font-bold text-fuchsia-200">{summary.average_shop || summary.average} / 5</span>
+                <span className="font-bold text-fuchsia-200">{summary.shop_average || summary.average_shop || summary.average} / 5</span>
               </div>
             </div>
           )}

@@ -37,6 +37,8 @@ class CustomerReviewController extends Controller
                 'average' => $avgOverall ?: 5.0,
                 'stylist_average' => $avgStylist ?: $avgOverall ?: 5.0,
                 'shop_average' => $avgShop ?: $avgOverall ?: 5.0,
+                'average_stylist' => $avgStylist ?: $avgOverall ?: 5.0,
+                'average_shop' => $avgShop ?: $avgOverall ?: 5.0,
                 'count' => (clone $query)->count(),
             ],
         ]]);

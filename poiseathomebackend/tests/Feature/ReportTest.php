@@ -52,6 +52,7 @@ class ReportTest extends TestCase
         // pending
         AppointmentPayment::create([
             'appointment_id' => $app->id,
+            'payment_type' => 'downpayment',
             'payment_method' => 'gcash',
             'amount' => 50,
             'status' => 'pending_verification',
@@ -61,6 +62,7 @@ class ReportTest extends TestCase
         // verified
         AppointmentPayment::create([
             'appointment_id' => $app->id,
+            'payment_type' => 'downpayment',
             'payment_method' => 'gcash',
             'amount' => 200,
             'status' => 'verified',
@@ -70,6 +72,7 @@ class ReportTest extends TestCase
         // rejected
         AppointmentPayment::create([
             'appointment_id' => $app->id,
+            'payment_type' => 'downpayment',
             'payment_method' => 'gcash',
             'amount' => 100,
             'status' => 'rejected',
