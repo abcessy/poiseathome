@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, CalendarCheck, Check, Clock, Heart, Home as HomeIcon, MapPin, ShieldCheck, Sparkles, Star, Users } from 'lucide-react';
 import PublicHeader from '../components/PublicHeader';
 import PublicFooter from '../components/PublicFooter';
-import heroImage from '../assets/poise-home-service-hero.png';
+import heroImage from '../assets/poiseathomehero.jpg';
 import benefitsImage from '../assets/poise-home-service-benefits.png';
 import { fetchApi, mediaUrl } from '../services/api';
 import { formatDuration, formatMoney } from '../utils/formatters';
@@ -41,9 +41,9 @@ const Home = () => {
               </div>
             </div>
             <div className="relative min-h-[26rem] lg:min-h-full">
-              <img src={heroImage} alt="Poise hairstylist styling a client at home" className="absolute inset-0 h-full w-full object-cover object-[66%_center]" fetchPriority="high" />
+              <img src={heroImage} alt="Poise Hair Center storefront and salon" className="absolute inset-0 h-full w-full object-cover object-[center_35%]" fetchPriority="high" />
               <div className="absolute inset-y-0 left-0 hidden w-24 bg-gradient-to-r from-[#fcfaff] to-transparent lg:block" />
-              <div className="absolute bottom-6 left-6 right-6 rounded-xl border border-white/60 bg-white/90 p-5 shadow-lg backdrop-blur-sm sm:left-auto sm:max-w-xs lg:bottom-10 lg:right-10"><p className="text-sm font-semibold text-primary-deep">Designed around your day</p><p className="mt-1 text-sm leading-6 text-text-muted">Browse, schedule, and manage your home appointment online.</p></div>
+              <div className="absolute bottom-6 left-6 right-6 rounded-xl border border-white/60 bg-white/90 p-5 shadow-lg backdrop-blur-sm sm:left-auto sm:max-w-xs lg:bottom-10 lg:right-10"><p className="text-sm font-semibold text-primary-deep">Poise Hair Center</p><p className="mt-1 text-sm leading-6 text-text-muted">Browse, schedule, and enjoy authentic salon care at home.</p></div>
             </div>
           </div>
         </section>
