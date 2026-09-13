@@ -13,12 +13,26 @@ class AccountProfileController extends Controller
 {
     public function update(UpdateAccountProfileRequest $request): JsonResponse
     {
-        $request->user()->update($request->validated());
+        $user = $request->user();
+        $user->update($request->validated());
+
+        if ($user->role === 'staff') {
+            if ($user->profile) {
+                $user->profile->update([
+                    'display_name' => $user->name,
+                ]);
+            } else {
+                $user->profile()->create([
+                    'display_name' => $user->name,
+                    'is_available' => true,
+                ]);
+            }
+        }
 
         return response()->json([
             'status' => 'success',
             'message' => 'Profile updated successfully.',
-            'data' => $request->user()->fresh(),
+            'data' => $user->fresh()->load('profile'),
         ]);
     }
 

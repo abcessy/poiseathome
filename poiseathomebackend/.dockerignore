@@ -1,0 +1,4 @@
+vendor
+storage/framework/testing
+.git
+.env

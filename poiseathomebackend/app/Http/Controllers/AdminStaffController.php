@@ -133,6 +133,9 @@ class AdminStaffController extends Controller
         $staff->update($validatedUser);
         
         if ($staff->profile) {
+            if (isset($validatedUser['name']) && !isset($validatedProfile['display_name'])) {
+                $validatedProfile['display_name'] = $validatedUser['name'];
+            }
             $staff->profile->update($validatedProfile);
         }
 

@@ -102,7 +102,10 @@ const AdminStaffList = () => {
                           </div>
                         )}
                         <div className="ml-3">
-                          <p className="font-semibold text-text-primary">{s.profile?.display_name || s.name}</p>
+                          <p className="font-semibold text-text-primary">{s.name}</p>
+                          {s.profile?.display_name && s.profile.display_name !== s.name && (
+                            <p className="text-xs font-medium text-primary-purple">Display: {s.profile.display_name}</p>
+                          )}
                           <p className="text-xs text-text-muted">{s.email}</p>
                         </div>
                       </div>

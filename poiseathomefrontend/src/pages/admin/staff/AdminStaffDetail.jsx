@@ -87,7 +87,10 @@ const AdminStaffDetail = () => {
                 <User className="w-12 h-12 text-primary-purple" />
               )}
             </div>
-            <h2 className="text-xl font-bold text-text-primary">{staff.profile?.display_name || staff.name}</h2>
+            <h2 className="text-xl font-bold text-text-primary">{staff.name}</h2>
+            {staff.profile?.display_name && staff.profile.display_name !== staff.name && (
+              <p className="text-sm font-medium text-primary-purple">Display: {staff.profile.display_name}</p>
+            )}
             <p className="text-sm text-text-muted">{staff.profile?.specialization || 'No specialization'}</p>
             
             <div className="mt-6 pt-6 border-t border-gray-100 text-left space-y-3 text-sm">

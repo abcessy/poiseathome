@@ -57,6 +57,10 @@ const AccountProfile = () => {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || 'Profile could not be updated.');
       await checkUser();
+      setStaffProfile(prev => ({
+        ...prev,
+        display_name: form.name,
+      }));
       setMessage('Your personal details are up to date.');
     } catch (exception) { setError(exception.message); }
     finally { setSaving(false); }
@@ -91,6 +95,7 @@ const AccountProfile = () => {
         const firstError = Object.values(payload.errors || {})[0]?.[0];
         throw new Error(firstError || payload.message || 'Professional details could not be updated.');
       }
+      await checkUser();
       setStaffMessage('Your professional details are up to date.');
     } catch (exception) { setStaffError(exception.message); }
     finally { setStaffSaving(false); }
