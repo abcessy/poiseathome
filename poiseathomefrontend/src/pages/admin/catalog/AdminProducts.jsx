@@ -76,8 +76,26 @@ const AdminProducts = () => {
     e.preventDefault();
     try {
       const url = editingProd ? `/admin/products/${editingProd.id}` : '/admin/products';
-      const payload = { ...formData };
-      if (!payload.cost_price) delete payload.cost_price;
+      const payload = {
+        product_category_id: formData.product_category_id,
+        sku: formData.sku?.trim(),
+        name: formData.name?.trim(),
+        description: formData.description || null,
+        brand: formData.brand || null,
+        unit: formData.unit,
+        low_stock_threshold: Number(formData.low_stock_threshold) || 0,
+        is_active: Boolean(formData.is_active),
+      };
+
+      if (formData.cost_price !== '' && formData.cost_price !== null && formData.cost_price !== undefined) {
+        payload.cost_price = Number(formData.cost_price);
+      } else {
+        payload.cost_price = null;
+      }
+
+      if (!editingProd && formData.initial_quantity !== '' && formData.initial_quantity !== null && formData.initial_quantity !== undefined) {
+        payload.initial_quantity = Number(formData.initial_quantity);
+      }
       
       const res = await fetchApi(url, {
         method: editingProd ? 'PUT' : 'POST',
@@ -90,12 +108,29 @@ const AdminProducts = () => {
         const err = await res.json();
         await messageDialog(err.message || 'The product could not be saved.');
       }
-    } catch {}
+    } catch {
+      await messageDialog('A network error occurred while saving the product.');
+    }
   };
 
   const openModal = (prod = null) => {
     setEditingProd(prod);
-    setFormData(prod ? { ...prod, cost_price: prod.cost_price || '' } : initialForm);
+    if (prod) {
+      setFormData({
+        product_category_id: prod.product_category_id || '',
+        sku: prod.sku || '',
+        name: prod.name || '',
+        description: prod.description || '',
+        brand: prod.brand || '',
+        unit: prod.unit || 'milliliter',
+        cost_price: prod.cost_price ?? '',
+        low_stock_threshold: prod.low_stock_threshold ?? 0,
+        is_active: Boolean(prod.is_active),
+        initial_quantity: ''
+      });
+    } else {
+      setFormData(initialForm);
+    }
     setShowModal(true);
   };
 

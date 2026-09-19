@@ -209,4 +209,46 @@ class InventoryTest extends TestCase
             ->assertStatus(400);
         $this->assertEquals(20, $product->fresh()->inventory->available_quantity);
     }
+
+    public function test_admin_can_update_product_cost_price_and_clear_it()
+    {
+        $this->actingAs($this->admin);
+
+        $product = Product::create([
+            'product_category_id' => $this->cat->id,
+            'sku' => 'UPDATE-001',
+            'name' => 'Original Name',
+            'unit' => 'bottle',
+            'cost_price' => 350.00,
+            'low_stock_threshold' => 5,
+            'is_active' => true,
+        ]);
+
+        // Update name and cost_price
+        $res = $this->putJson("/api/v1/admin/products/{$product->id}", [
+            'product_category_id' => $this->cat->id,
+            'sku' => 'UPDATE-001',
+            'name' => 'Updated Name',
+            'unit' => 'bottle',
+            'cost_price' => 450.50,
+            'low_stock_threshold' => 10,
+            'is_active' => true,
+        ]);
+        $res->assertOk();
+        $this->assertEquals('Updated Name', $product->fresh()->name);
+        $this->assertEquals(450.50, (float) $product->fresh()->cost_price);
+
+        // Clear cost_price to null
+        $clearRes = $this->putJson("/api/v1/admin/products/{$product->id}", [
+            'product_category_id' => $this->cat->id,
+            'sku' => 'UPDATE-001',
+            'name' => 'Updated Name',
+            'unit' => 'bottle',
+            'cost_price' => null,
+            'low_stock_threshold' => 10,
+            'is_active' => true,
+        ]);
+        $clearRes->assertOk();
+        $this->assertNull($product->fresh()->cost_price);
+    }
 }

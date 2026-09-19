@@ -101,7 +101,7 @@ class BookingController extends Controller
         }
 
         $totalDuration = (int) $services->sum('duration_minutes') + max(0, (int) $request->input('extended_minutes', 0));
-        $slots = $this->availabilityService->getAvailableSlots($services->first(), $staff, $request->date, $totalDuration);
+        $slots = $this->availabilityService->getAvailableSlots($services->first(), $staff, $request->date, $totalDuration, $request->user());
 
         return response()->json([
             'status' => 'success',

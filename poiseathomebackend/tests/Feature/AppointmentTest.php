@@ -156,6 +156,43 @@ class AppointmentTest extends TestCase
             ->whereDate('appointment_date', $date)->count());
     }
 
+    public function test_customer_cannot_double_book_overlapping_appointments_across_stylists()
+    {
+        $otherStaff = User::factory()->create(['role' => 'staff', 'is_active' => true]);
+        $otherStaff->profile()->create(['is_available' => true]);
+        $otherStaff->services()->attach($this->service->id);
+
+        $date = now()->addDays(3)->format('Y-m-d');
+        $payload1 = [
+            'service_id' => $this->service->id,
+            'staff_id' => $this->staff->id,
+            'date' => $date,
+            'start_time' => '10:00',
+            'service_address' => '123 Main St',
+        ];
+        $payload2 = [
+            'service_id' => $this->service->id,
+            'staff_id' => $otherStaff->id,
+            'date' => $date,
+            'start_time' => '10:00',
+            'service_address' => '123 Main St',
+        ];
+
+        // First appointment succeeds
+        $this->actingAs($this->customer)->postJson('/api/v1/appointments', $payload1)->assertCreated();
+
+        // Same customer trying to book another stylist at the same time fails with conflict (409)
+        $this->actingAs($this->customer)->postJson('/api/v1/appointments', $payload2)->assertConflict();
+
+        // Customer's availability also hides the booked slot
+        $avail = $this->actingAs($this->customer)->getJson(
+            "/api/v1/booking/availability?service_id={$this->service->id}&staff_id={$otherStaff->id}&date={$date}"
+        );
+        $avail->assertOk();
+        $slots = collect($avail->json('data.slots'))->pluck('start');
+        $this->assertNotContains('10:00', $slots);
+    }
+
     public function test_booking_uses_snapshots_downpayment_and_safe_numbers()
     {
         config(['poiseathome.payment.downpayment_percentage' => 30]);

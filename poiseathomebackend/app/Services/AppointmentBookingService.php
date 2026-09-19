@@ -59,7 +59,7 @@ class AppointmentBookingService
             $slotEnd = $slotStart->copy()->addMinutes($totalDuration);
 
             // Double check candidate slots with availability service
-            $slots = $this->availabilityService->getAvailableSlots($primaryService, $staff, $date, $totalDuration);
+            $slots = $this->availabilityService->getAvailableSlots($primaryService, $staff, $date, $totalDuration, $customerId);
             $validSlot = collect($slots)->firstWhere('start', $slotStart->format('H:i'));
 
             if (!$validSlot) {
@@ -77,6 +77,19 @@ class AppointmentBookingService
 
             if ($hasStaffConflict) {
                 throw new Exception("This hairstylist is no longer available for the selected time slot.", 409);
+            }
+
+            // Lock and verify customer does not have overlapping appointments (prevent customer double booking)
+            $hasCustomerConflict = Appointment::where('customer_id', $customerId)
+                ->whereDate('appointment_date', $date)
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->where('start_time', '<', $slotEnd->format('H:i:s'))
+                ->where('end_time', '>', $slotStart->format('H:i:s'))
+                ->lockForUpdate()
+                ->exists();
+
+            if ($hasCustomerConflict) {
+                throw new Exception("You already have an appointment scheduled during this time slot. Double booking is not permitted.", 409);
             }
 
             // Check system-wide handling capacity with lock

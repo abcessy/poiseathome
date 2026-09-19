@@ -67,4 +67,60 @@ class CatalogTest extends TestCase
         ]);
         $response->assertStatus(403);
     }
+
+    public function test_admin_can_delete_service_without_appointments()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $cat = ServiceCategory::create(['name' => 'Nails', 'slug' => 'nails', 'is_active' => true]);
+        $svc = Service::create([
+            'service_category_id' => $cat->id,
+            'name' => 'Manicure',
+            'slug' => 'manicure',
+            'duration_minutes' => 45,
+            'price' => 350,
+            'is_home_service' => true,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($admin)->deleteJson("/api/v1/admin/services/{$svc->id}");
+        $response->assertOk();
+        $this->assertDatabaseMissing('services', ['id' => $svc->id]);
+    }
+
+    public function test_admin_cannot_delete_service_with_appointments()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $customer = User::factory()->create(['role' => 'customer']);
+        $staff = User::factory()->create(['role' => 'staff']);
+        $cat = ServiceCategory::create(['name' => 'Nails', 'slug' => 'nails', 'is_active' => true]);
+        $svc = Service::create([
+            'service_category_id' => $cat->id,
+            'name' => 'Pedicure',
+            'slug' => 'pedicure',
+            'duration_minutes' => 45,
+            'price' => 350,
+            'is_home_service' => true,
+            'is_active' => true,
+        ]);
+
+        \App\Models\Appointment::create([
+            'appointment_number' => 'TEST-SVC-DEL',
+            'customer_id' => $customer->id,
+            'staff_user_id' => $staff->id,
+            'service_id' => $svc->id,
+            'appointment_date' => now()->addDays(2)->format('Y-m-d'),
+            'start_time' => '10:00:00',
+            'end_time' => '10:45:00',
+            'service_name_snapshot' => $svc->name,
+            'service_price_snapshot' => $svc->price,
+            'service_duration_minutes_snapshot' => 45,
+            'customer_name_snapshot' => $customer->name,
+            'service_address' => '123 Test St',
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($admin)->deleteJson("/api/v1/admin/services/{$svc->id}");
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('services', ['id' => $svc->id]);
+    }
 }

@@ -34,6 +34,11 @@ class Service extends Model
         return $this->belongsTo(ServiceCategory::class, 'service_category_id');
     }
 
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class);
+    }
+
     public function qualifiedStaff()
     {
         return $this->belongsToMany(User::class, 'service_staff', 'service_id', 'staff_user_id')

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchApi } from '../../../services/api';
 import DashboardLayout from '../../../layouts/DashboardLayout';
-import { ArrowLeft, Loader, Plus, Minus, FileText } from 'lucide-react';
+import { ArrowLeft, Loader, Plus, Minus, FileText, Edit2 } from 'lucide-react';
 import { InventoryBadge } from './AdminInventory';
 import { formatDateTime } from '../../../utils/formatters';
 import { useAppDialog } from '../../../context/AppDialogContext';
@@ -87,13 +87,16 @@ const AdminInventoryDetail = () => {
           </div>
         </div>
 
-        <div className="p-6 bg-white border-b border-gray-100 flex gap-3">
+        <div className="p-6 bg-white border-b border-gray-100 flex flex-wrap gap-3 items-center">
           <button onClick={() => setShowModal('in')} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg hover:bg-blue-200 flex items-center text-sm">
             <Plus className="w-4 h-4 mr-1" /> Stock In
           </button>
           <button onClick={() => setShowModal('out')} className="px-4 py-2 bg-orange-100 text-orange-700 font-bold rounded-lg hover:bg-orange-200 flex items-center text-sm">
             <Minus className="w-4 h-4 mr-1" /> Stock Out
           </button>
+          <Link to="/admin/products" className="px-4 py-2 bg-purple-50 text-primary-purple font-bold rounded-lg hover:bg-purple-100 flex items-center text-sm">
+            <Edit2 className="w-4 h-4 mr-1" /> Manage in Products
+          </Link>
           <button onClick={() => setShowModal('adjust')} className="px-4 py-2 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200 flex items-center text-sm ml-auto">
             <FileText className="w-4 h-4 mr-1" /> Adjust Stock
           </button>

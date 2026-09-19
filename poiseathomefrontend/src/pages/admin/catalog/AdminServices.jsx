@@ -3,8 +3,10 @@ import DashboardLayout from '../../../layouts/DashboardLayout';
 import { fetchApi, mediaUrl } from '../../../services/api';
 import { formatMoney, formatDuration } from '../../../utils/formatters';
 import { Plus, CheckCircle, XCircle, Users, ImageIcon, UploadCloud, Trash2 } from 'lucide-react';
+import { useAppDialog } from '../../../context/AppDialogContext';
 
 const AdminServices = () => {
+  const { confirmDialog, messageDialog } = useAppDialog();
   const [services, setServices] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -118,6 +120,30 @@ const AdminServices = () => {
     loadData();
   };
 
+  const handleDelete = async (svc) => {
+    const confirmed = await confirmDialog(
+      `Are you sure you want to remove the service "${svc.name}"? This action cannot be undone.`,
+      {
+        title: 'Delete Service',
+        confirmLabel: 'Delete',
+        tone: 'danger',
+      }
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetchApi(`/admin/services/${svc.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        loadData();
+      } else {
+        await messageDialog(data.message || 'The service could not be deleted.');
+      }
+    } catch (e) {
+      await messageDialog('A network error occurred while attempting to delete the service.');
+    }
+  };
+
   const openStaffManager = async (svc) => {
     setActiveService(svc);
     setShowStaffModal(true);
@@ -218,8 +244,9 @@ const AdminServices = () => {
                         <Users className="w-3 h-3 mr-1" /> {svc.qualified_staff_count}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right whitespace-nowrap space-x-3">
                       <button onClick={() => openEdit(svc)} className="text-primary-accent hover:text-primary-deep font-medium text-sm">Edit</button>
+                      <button onClick={() => handleDelete(svc)} className="text-red-600 hover:text-red-800 font-medium text-sm">Delete</button>
                     </td>
                   </tr>
                 ))

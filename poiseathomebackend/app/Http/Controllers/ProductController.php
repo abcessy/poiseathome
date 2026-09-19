@@ -56,6 +56,11 @@ class ProductController extends Controller
             'initial_quantity' => 'nullable|numeric|min:0',
         ]);
 
+        if ($request->has('cost_price')) {
+            $cost = $request->input('cost_price');
+            $validated['cost_price'] = ($cost === null || $cost === '') ? null : (float) $cost;
+        }
+
         $product = Product::create($validated);
 
         $initialQuantity = $request->input('initial_quantity', 0);
@@ -85,8 +90,15 @@ class ProductController extends Controller
             'is_active' => 'boolean',
         ]);
 
+        if ($request->has('cost_price')) {
+            $cost = $request->input('cost_price');
+            $validated['cost_price'] = ($cost === null || $cost === '') ? null : (float) $cost;
+        }
+
         $product->update($validated);
-        return response()->json(['status' => 'success', 'data' => $product->fresh('inventory')]);
+        $fresh = $product->fresh(['category', 'inventory']);
+        $fresh->inventory_status = $fresh->inventory_status;
+        return response()->json(['status' => 'success', 'data' => $fresh]);
     }
 
     public function archive(Product $product)

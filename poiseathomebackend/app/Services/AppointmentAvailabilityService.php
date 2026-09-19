@@ -25,7 +25,7 @@ class AppointmentAvailabilityService
         return max($activeStaffCount, 1);
     }
 
-    public function getAvailableSlots(Service $service, User $staff, $dateString, int $customDuration = 0)
+    public function getAvailableSlots(Service $service, User $staff, $dateString, int $customDuration = 0, $customer = null)
     {
         // 1. Validate Date
         $tz = config('app.timezone', 'Asia/Manila');
@@ -67,6 +67,14 @@ class AppointmentAvailabilityService
             ->get(['staff_user_id', 'start_time', 'end_time']);
 
         $staffAppointments = $allDayAppointments->where('staff_user_id', $staff->id);
+        $customerAppointments = collect();
+        if ($customer) {
+            $customerId = $customer instanceof User ? $customer->id : (int) $customer;
+            $customerAppointments = Appointment::where('customer_id', $customerId)
+                ->whereDate('appointment_date', $date->format('Y-m-d'))
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->get(['start_time', 'end_time']);
+        }
         $systemCapacity = $this->getSystemHandlingCapacity();
 
         $slots = [];
@@ -96,6 +104,19 @@ class AppointmentAvailabilityService
                 if ($appStart->lt($slotEnd) && $appEnd->gt($slotStart)) {
                     $conflict = true;
                     break;
+                }
+            }
+
+            // Check Customer Overlaps (prevent double booking for customer)
+            if (!$conflict && $customerAppointments->isNotEmpty()) {
+                foreach ($customerAppointments as $cApp) {
+                    $cAppStart = Carbon::parse($date->format('Y-m-d') . ' ' . $cApp->start_time, $tz);
+                    $cAppEnd = Carbon::parse($date->format('Y-m-d') . ' ' . $cApp->end_time, $tz);
+
+                    if ($cAppStart->lt($slotEnd) && $cAppEnd->gt($slotStart)) {
+                        $conflict = true;
+                        break;
+                    }
                 }
             }
 
