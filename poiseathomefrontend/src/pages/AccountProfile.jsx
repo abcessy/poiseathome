@@ -51,7 +51,17 @@ const AccountProfile = () => {
 
   const submit = async event => {
     event.preventDefault();
-    setSaving(true); setMessage(''); setError('');
+    setMessage(''); setError('');
+
+    if (form.contact_number && form.contact_number.trim()) {
+      const cleanPhone = form.contact_number.trim().replace(/[\s-]/g, '');
+      if (!/^(09\d{9}|\+639\d{9})$/.test(cleanPhone)) {
+        setError('Please enter a valid Philippine mobile number (e.g. 09123456789 or +639123456789).');
+        return;
+      }
+    }
+
+    setSaving(true);
     try {
       const response = await fetchApi('/account/profile', { method: 'PATCH', body: JSON.stringify(form) });
       const payload = await response.json();
@@ -169,7 +179,7 @@ const AccountProfile = () => {
           <div className="grid gap-5 sm:grid-cols-2">
             <div><label htmlFor="profile-name" className="mb-1 block text-sm font-medium">Full name</label><div className="relative"><UserRound className="absolute left-3 top-3.5 h-4 w-4 text-gray-400" /><input id="profile-name" required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} className="h-11 w-full pl-10 pr-3" /></div></div>
             <div><label htmlFor="profile-phone" className="mb-1 block text-sm font-medium">Contact number</label><div className="relative"><Phone className="absolute left-3 top-3.5 h-4 w-4 text-gray-400" /><input id="profile-phone" value={form.contact_number} onChange={event => setForm({ ...form, contact_number: event.target.value })} className="h-11 w-full pl-10 pr-3" placeholder="09XX XXX XXXX" /></div></div>
-            <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium">Email address</label><div className="relative"><AtSign className="absolute left-3 top-3.5 h-4 w-4 text-gray-400" /><input value={user?.email || ''} readOnly className="h-11 w-full bg-gray-50 pl-10 pr-3 text-text-muted" /></div><p className="mt-2 text-xs text-text-muted">Contact the administrator if your sign-in email needs to be corrected.</p></div>
+            <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium">Email address</label><div className="relative"><AtSign className="absolute left-3 top-3.5 h-4 w-4 text-gray-400" /><input value={user?.email || ''} readOnly className="h-11 w-full bg-gray-50 pl-10 pr-3 text-text-muted" /></div><p className="mt-2 text-xs text-text-muted">Contact the administrator at <a href="mailto:support@poiseathome.com" className="font-semibold text-primary-deep hover:underline">support@poiseathome.com</a> or <a href="tel:+639171234567" className="font-semibold text-primary-deep hover:underline">+63 917 123 4567</a> if your sign-in email needs to be corrected.</p></div>
           </div>
           <div className="mt-8 flex justify-end border-t border-gray-100 pt-6"><button disabled={saving} className="btn-primary min-w-36">{saving ? 'Saving…' : 'Save changes'}</button></div>
         </form>

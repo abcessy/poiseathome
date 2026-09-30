@@ -58,6 +58,10 @@ class AppointmentBookingService
             $slotStart = Carbon::parse($date . ' ' . $startTime, $tz);
             $slotEnd = $slotStart->copy()->addMinutes($totalDuration);
 
+            if ($slotStart->lt(Carbon::now($tz))) {
+                throw new Exception("Cannot book an appointment for a past date or time.", 422);
+            }
+
             // Double check candidate slots with availability service
             $slots = $this->availabilityService->getAvailableSlots($primaryService, $staff, $date, $totalDuration, $customerId);
             $validSlot = collect($slots)->firstWhere('start', $slotStart->format('H:i'));
@@ -190,5 +194,138 @@ class AppointmentBookingService
         }
 
         return $appointment;
+    }
+
+    public function rescheduleAppointment(Appointment $appointment, string $newDate, string $newStartTime, ?int $newStaffId = null, ?User $actor = null)
+    {
+        if (!in_array($appointment->status, ['pending', 'confirmed'])) {
+            throw new Exception("Only pending or confirmed appointments can be rescheduled. Current status: {$appointment->status}.", 400);
+        }
+
+        $rescheduled = DB::transaction(function () use ($appointment, $newDate, $newStartTime, $newStaffId, $actor) {
+            $appointment = Appointment::whereKey($appointment->id)->lockForUpdate()->firstOrFail();
+            $tz = config('app.timezone', 'Asia/Manila');
+
+            $targetStaffId = $newStaffId ?: $appointment->staff_user_id;
+            $staff = User::where('id', $targetStaffId)
+                ->where('role', 'staff')
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$staff || !$staff->profile || !$staff->profile->is_available) {
+                throw new Exception("The selected hairstylist is currently unavailable.", 422);
+            }
+
+            // Qualification check
+            if (!$staff->services()->where('service_id', $appointment->service_id)->exists()) {
+                throw new Exception("The selected hairstylist is not qualified for this service.", 422);
+            }
+
+            $totalDuration = (int) $appointment->service_duration_minutes_snapshot;
+            $slotStart = Carbon::parse($newDate . ' ' . $newStartTime, $tz);
+            $slotEnd = $slotStart->copy()->addMinutes($totalDuration);
+
+            if ($slotStart->lt(Carbon::now($tz))) {
+                throw new Exception("Cannot reschedule an appointment to a past date or time.", 422);
+            }
+
+            // Verify with availability service (excluding this appointment)
+            $service = Service::find($appointment->service_id);
+            $slots = $this->availabilityService->getAvailableSlots($service, $staff, $newDate, $totalDuration, $appointment->customer_id, $appointment->id);
+            $validSlot = collect($slots)->firstWhere('start', $slotStart->format('H:i'));
+
+            if (!$validSlot) {
+                throw new Exception("The requested time slot ({$slotStart->format('H:i')}) is not available on {$newDate}.", 409);
+            }
+
+            // Lock and check staff conflict (excluding this appointment)
+            $hasStaffConflict = Appointment::where('staff_user_id', $staff->id)
+                ->whereKeyNot($appointment->id)
+                ->whereDate('appointment_date', $newDate)
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->where('start_time', '<', $slotEnd->format('H:i:s'))
+                ->where('end_time', '>', $slotStart->format('H:i:s'))
+                ->lockForUpdate()
+                ->exists();
+
+            if ($hasStaffConflict) {
+                throw new Exception("The hairstylist has an overlapping appointment during this time slot.", 409);
+            }
+
+            // Lock and check customer conflict (excluding this appointment)
+            $hasCustomerConflict = Appointment::where('customer_id', $appointment->customer_id)
+                ->whereKeyNot($appointment->id)
+                ->whereDate('appointment_date', $newDate)
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->where('start_time', '<', $slotEnd->format('H:i:s'))
+                ->where('end_time', '>', $slotStart->format('H:i:s'))
+                ->lockForUpdate()
+                ->exists();
+
+            if ($hasCustomerConflict) {
+                throw new Exception("You already have another appointment scheduled during this time slot.", 409);
+            }
+
+            // Check system capacity
+            $systemCapacity = $this->availabilityService->getSystemHandlingCapacity();
+            $concurrentCount = Appointment::whereDate('appointment_date', $newDate)
+                ->whereKeyNot($appointment->id)
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->where('start_time', '<', $slotEnd->format('H:i:s'))
+                ->where('end_time', '>', $slotStart->format('H:i:s'))
+                ->lockForUpdate()
+                ->count();
+
+            if ($concurrentCount >= $systemCapacity) {
+                throw new Exception("Maximum salon operating capacity reached for this time slot.", 409);
+            }
+
+            $oldDate = $appointment->appointment_date;
+            $oldTime = $appointment->start_time;
+
+            $appointment->update([
+                'appointment_date' => $newDate,
+                'start_time' => $slotStart->format('H:i:s'),
+                'end_time' => $slotEnd->format('H:i:s'),
+                'staff_user_id' => $staff->id,
+            ]);
+
+            return [$appointment, $oldDate, $oldTime, $staff];
+        });
+
+        [$appointment, $oldDate, $oldTime, $staff] = $rescheduled;
+
+        try {
+            DB::afterCommit(function () use ($appointment, $oldDate, $oldTime, $staff) {
+                $this->notificationService->notifyUser(User::find($appointment->customer_id), [
+                    'type' => 'appointment_rescheduled',
+                    'title' => 'Appointment Rescheduled',
+                    'message' => "Your appointment {$appointment->appointment_number} has been rescheduled to {$appointment->appointment_date} at {$appointment->start_time}.",
+                    'reference_type' => 'appointment',
+                    'reference_code' => $appointment->appointment_number,
+                ]);
+
+                $this->notificationService->notifyAdmins([
+                    'type' => 'appointment_rescheduled',
+                    'title' => 'Appointment Rescheduled',
+                    'message' => "Appointment {$appointment->appointment_number} was moved from {$oldDate} to {$appointment->appointment_date} at {$appointment->start_time}.",
+                    'reference_type' => 'appointment',
+                    'reference_id' => $appointment->id,
+                ]);
+
+                $this->notificationService->notifyStaff($staff, [
+                    'type' => 'appointment_rescheduled',
+                    'title' => 'Schedule Updated',
+                    'message' => "Appointment {$appointment->appointment_number} has been moved to {$appointment->appointment_date} at {$appointment->start_time}.",
+                    'reference_type' => 'appointment',
+                    'reference_id' => $appointment->id,
+                ]);
+            });
+        } catch (Exception $e) {
+            Log::error('Notifications failed on reschedule: ' . $e->getMessage());
+        }
+
+        return $appointment->fresh(['staff.profile', 'service.category']);
     }
 }

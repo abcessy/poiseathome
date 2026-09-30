@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { fetchApi } from '../../../services/api';
-import { formatMoney, formatDuration, formatDate, formatTime, formatDateTime } from '../../../utils/formatters';
+import { formatMoney, formatDuration, formatDate, formatTime, formatDateTime, getTodayDateString } from '../../../utils/formatters';
 import DashboardLayout from '../../../layouts/DashboardLayout';
 import { StatusBadge, PaymentStatusBadge } from './CustomerAppointments';
-import { ArrowLeft, Calendar, Clock, MapPin, User, AlertCircle, UploadCloud, Scissors, Star, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, User, AlertCircle, UploadCloud, Scissors, Star, X, Phone, Mail } from 'lucide-react';
 import PaymentSubmissionModal from './PaymentSubmissionModal';
 import { useAppDialog } from '../../../context/AppDialogContext';
 
@@ -27,6 +27,15 @@ const CustomerAppointmentDetail = () => {
   const [shopRating, setShopRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [ratingError, setRatingError] = useState('');
+
+  // Reschedule modal state
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleSlots, setRescheduleSlots] = useState([]);
+  const [rescheduleLoadingSlots, setRescheduleLoadingSlots] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState('');
   
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -117,6 +126,63 @@ const CustomerAppointmentDetail = () => {
     }
   };
 
+  useEffect(() => {
+    if (!showRescheduleModal || !app || !rescheduleDate) return;
+    loadRescheduleSlots();
+  }, [showRescheduleModal, rescheduleDate]);
+
+  const loadRescheduleSlots = async () => {
+    setRescheduleLoadingSlots(true);
+    setRescheduleError('');
+    setRescheduleTime('');
+    try {
+      const res = await fetchApi(
+        `/booking/availability?staff_id=${app.staff_user_id}&date=${rescheduleDate}&service_id=${app.service_id}&ignore_appointment_id=${app.id}`
+      );
+      if (res.ok) {
+        const json = await res.json();
+        setRescheduleSlots(json.data?.slots || []);
+      } else {
+        setRescheduleSlots([]);
+      }
+    } catch {
+      setRescheduleSlots([]);
+    } finally {
+      setRescheduleLoadingSlots(false);
+    }
+  };
+
+  const handleRescheduleSubmit = async (e) => {
+    e.preventDefault();
+    if (!rescheduleTime) {
+      setRescheduleError('Please select a time slot.');
+      return;
+    }
+    setRescheduling(true);
+    setRescheduleError('');
+    try {
+      const res = await fetchApi(`/customer/appointments/${id}/reschedule`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          date: rescheduleDate,
+          start_time: rescheduleTime
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowRescheduleModal(false);
+        await messageDialog('Your appointment has been successfully rescheduled.');
+        loadApp();
+      } else {
+        setRescheduleError(data.message || 'Could not reschedule appointment.');
+      }
+    } catch {
+      setRescheduleError('A network error occurred. Please try again.');
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
   if (loading) return <DashboardLayout role="customer"><div className="p-8">Loading...</div></DashboardLayout>;
   if (!app) return null;
 
@@ -188,16 +254,28 @@ const CustomerAppointmentDetail = () => {
               <div className="rounded-2xl border border-purple-200 bg-white p-5 shadow-[inset_4px_0_0_#9333ea]">
                 <div className="space-y-3 mb-5">
                   <div className="flex justify-between text-sm">
+                    <span className="text-text-muted">Total Service Price</span>
+                    <span className="font-medium text-text-primary">{formatMoney(app.service_price_snapshot)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
                     <span className="text-text-muted">Required Downpayment (30%)</span>
                     <span className="font-medium text-text-primary">{formatMoney(app.payment_summary?.required_downpayment)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-text-muted">Verified Total</span>
+                    <span className="text-text-muted">Verified Payment</span>
                     <span className="font-bold text-green-600">{formatMoney(app.payment_summary?.verified_amount)}</span>
                   </div>
+                  {parseFloat(app.payment_summary?.remaining_required_downpayment || 0) > 0 && (
+                    <div className="flex justify-between text-sm text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                      <span className="font-medium">Downpayment Due:</span>
+                      <span className="font-bold">{formatMoney(app.payment_summary?.remaining_required_downpayment)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm pt-3 border-t border-gray-100">
                     <span className="font-bold">Remaining Balance</span>
-                    <span className="font-bold text-text-primary">{formatMoney(app.payment_summary?.remaining_required_downpayment)}</span>
+                    <span className="font-bold text-primary-deep text-base">
+                      {formatMoney(app.payment_summary?.remaining_balance ?? Math.max(0, parseFloat(app.service_price_snapshot || 0) - parseFloat(app.payment_summary?.verified_amount || 0)))}
+                    </span>
                   </div>
                 </div>
 
@@ -209,7 +287,8 @@ const CustomerAppointmentDetail = () => {
 
                 {app.payment_summary?.payment_state === 'pending_verification' && (
                   <div className="bg-orange-50 text-orange-800 text-sm p-4 rounded-xl text-center font-medium border border-orange-100">
-                    Payment Under Review
+                    <p className="font-bold">Payment Under Review</p>
+                    <p className="text-xs text-orange-700 mt-1">Our administrator is reviewing your payment proof. For urgent assistance, contact <a href="mailto:support@poiseathome.com" className="font-bold underline">support@poiseathome.com</a> or <a href="tel:+639171234567" className="font-bold underline">+63 917 123 4567</a>.</p>
                   </div>
                 )}
                 
@@ -229,6 +308,7 @@ const CustomerAppointmentDetail = () => {
                       <div>
                         <p className="text-sm font-bold text-red-800">Payment Rejected ({formatDate(rej.submitted_at)})</p>
                         <p className="text-sm text-red-600 mt-1">Reason: {rej.rejection_reason}</p>
+                        <p className="text-xs text-red-700 mt-2">Questions? Contact Salon Support at <a href="mailto:support@poiseathome.com" className="font-bold underline">support@poiseathome.com</a> or call <a href="tel:+639171234567" className="font-bold underline">+63 917 123 4567</a>.</p>
                       </div>
                     </div>
                   ))}
@@ -366,7 +446,18 @@ const CustomerAppointmentDetail = () => {
             {['pending', 'confirmed'].includes(app.status) && (
               <section>
                 <h3 className="text-sm font-bold text-primary-purple uppercase tracking-wider mb-4">Actions</h3>
-                <div className="space-y-4">
+                <div className="space-y-3">
+                  <button 
+                    onClick={() => {
+                      setRescheduleDate(app.appointment_date);
+                      setRescheduleTime('');
+                      setRescheduleError('');
+                      setShowRescheduleModal(true);
+                    }}
+                    className="w-full py-3 bg-lavender border-2 border-primary-purple/30 text-primary-deep font-bold rounded-xl hover:bg-purple-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Calendar className="w-4 h-4 text-primary-purple" /> Reschedule Appointment
+                  </button>
                   <button 
                     onClick={() => {
                       setCancelError('');
@@ -377,11 +468,35 @@ const CustomerAppointmentDetail = () => {
                     Cancel Appointment
                   </button>
                   {app.payment_summary?.verified_amount > 0 && (
-                    <p className="text-xs text-text-muted text-center">Verified payment exists. Refund handling requires manual administrative action if you cancel.</p>
+                    <p className="text-xs text-text-muted text-center">Verified payment exists. Your payment stays securely assigned to your appointment when rescheduling.</p>
                   )}
                 </div>
               </section>
             )}
+
+            {/* Salon Administrator Support */}
+            <section>
+              <h3 className="text-sm font-bold text-primary-purple uppercase tracking-wider mb-3">Salon Administrator Support</h3>
+              <div className="rounded-2xl border border-purple-100 bg-lavender/35 p-5 space-y-3">
+                <p className="text-xs text-text-muted leading-relaxed">
+                  Have questions about payments, schedule modifications, or service location? Our administrators are here to help.
+                </p>
+                <div className="space-y-2 pt-2 border-t border-purple-100 text-xs">
+                  <div className="flex items-center gap-2 text-text-primary">
+                    <Phone className="w-4 h-4 text-primary-purple shrink-0" />
+                    <span>Hotline: <a href="tel:+639171234567" className="font-bold text-primary-deep hover:underline">+63 917 123 4567</a> / (02) 8123-4567</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-text-primary">
+                    <Mail className="w-4 h-4 text-primary-purple shrink-0" />
+                    <span>Email: <a href="mailto:support@poiseathome.com" className="font-bold text-primary-deep hover:underline">support@poiseathome.com</a></span>
+                  </div>
+                  <div className="flex items-center gap-2 text-text-muted">
+                    <Clock className="w-4 h-4 text-primary-purple shrink-0" />
+                    <span>Available: Mon – Sun, 8:00 AM – 7:00 PM</span>
+                  </div>
+                </div>
+              </div>
+            </section>
 
           </div>
 
@@ -536,6 +651,94 @@ const CustomerAppointmentDetail = () => {
                   className="btn-primary text-sm disabled:opacity-50"
                 >
                   {ratingSubmitting ? 'Submitting...' : 'Submit Review'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {showRescheduleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="font-bold text-xl text-primary-deep">Reschedule Appointment</h3>
+                <p className="text-xs text-text-muted mt-1">{app.appointment_number} • {app.service_name_snapshot}</p>
+              </div>
+              <button onClick={() => setShowRescheduleModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 bg-purple-50/60 rounded-xl text-xs space-y-1">
+              <p><span className="text-text-muted">Current:</span> <span className="font-bold text-text-primary">{formatDate(app.appointment_date)} at {formatTime(app.start_time)}</span></p>
+              <p><span className="text-text-muted">Stylist:</span> <span className="font-bold text-text-primary">{app.staff?.profile?.display_name || app.staff?.name}</span></p>
+              <p><span className="text-text-muted">Duration:</span> <span className="font-semibold text-text-primary">{app.service_duration_minutes_snapshot} mins</span></p>
+            </div>
+
+            <form onSubmit={handleRescheduleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-text-primary uppercase mb-1">
+                  Select New Date *
+                </label>
+                <input 
+                  type="date"
+                  min={getTodayDateString()}
+                  value={rescheduleDate}
+                  onChange={e => setRescheduleDate(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-primary uppercase mb-1">
+                  Available Start Time *
+                </label>
+                {rescheduleLoadingSlots ? (
+                  <p className="text-xs text-text-muted py-2">Loading available slots...</p>
+                ) : rescheduleSlots.length === 0 ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                    No available time slots on this date for {app.staff?.profile?.display_name || app.staff?.name}. Please pick another date.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 max-h-44 overflow-y-auto p-1">
+                    {rescheduleSlots.map(slot => (
+                      <button
+                        key={slot.start}
+                        type="button"
+                        onClick={() => setRescheduleTime(slot.start)}
+                        className={`py-2 px-2 text-xs font-bold rounded-lg border transition-colors ${
+                          rescheduleTime === slot.start
+                            ? 'bg-primary-purple text-white border-primary-purple shadow-sm'
+                            : 'bg-white text-text-primary border-gray-200 hover:border-primary-purple'
+                        }`}
+                      >
+                        {slot.start}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {rescheduleError && (
+                <div className="text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">
+                  {rescheduleError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button type="button" onClick={() => setShowRescheduleModal(false)} className="btn-ghost text-sm">
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={rescheduling || !rescheduleTime} 
+                  className="btn-primary text-sm flex items-center gap-1.5"
+                >
+                  {rescheduling ? 'Rescheduling...' : 'Confirm Reschedule'}
                 </button>
               </div>
             </form>

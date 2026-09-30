@@ -43,6 +43,10 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
+        $isPiece = $request->input('unit') === 'piece';
+        $quantityRule = $isPiece ? 'nullable|integer|min:0|max:100000' : 'nullable|numeric|min:0|max:100000';
+        $thresholdRule = $isPiece ? 'required|integer|min:0|max:100000' : 'required|numeric|min:0|max:100000';
+
         $validated = $request->validate([
             'product_category_id' => 'required|exists:product_categories,id',
             'sku' => 'required|string|max:255|unique:products',
@@ -51,9 +55,14 @@ class ProductController extends Controller
             'brand' => 'nullable|string|max:255',
             'unit' => 'required|string|in:piece,milliliter,gram,bottle,pack,tube,other',
             'cost_price' => 'nullable|numeric|min:0',
-            'low_stock_threshold' => 'required|numeric|min:0',
+            'low_stock_threshold' => $thresholdRule,
             'is_active' => 'boolean',
-            'initial_quantity' => 'nullable|numeric|min:0',
+            'initial_quantity' => $quantityRule,
+        ], [
+            'initial_quantity.integer' => 'Initial quantity must be a whole number for items counted in pieces.',
+            'initial_quantity.max' => 'Initial quantity cannot exceed 100,000.',
+            'low_stock_threshold.integer' => 'Low stock threshold must be a whole number for items counted in pieces.',
+            'low_stock_threshold.max' => 'Low stock threshold cannot exceed 100,000.',
         ]);
 
         if ($request->has('cost_price')) {
@@ -78,6 +87,10 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
+        $unit = $request->input('unit', $product->unit);
+        $isPiece = $unit === 'piece';
+        $thresholdRule = $isPiece ? 'required|integer|min:0|max:100000' : 'required|numeric|min:0|max:100000';
+
         $validated = $request->validate([
             'product_category_id' => 'required|exists:product_categories,id',
             'sku' => ['required', 'string', 'max:255', Rule::unique('products')->ignore($product->id)],
@@ -86,8 +99,11 @@ class ProductController extends Controller
             'brand' => 'nullable|string|max:255',
             'unit' => 'required|string|in:piece,milliliter,gram,bottle,pack,tube,other',
             'cost_price' => 'nullable|numeric|min:0',
-            'low_stock_threshold' => 'required|numeric|min:0',
+            'low_stock_threshold' => $thresholdRule,
             'is_active' => 'boolean',
+        ], [
+            'low_stock_threshold.integer' => 'Low stock threshold must be a whole number for items counted in pieces.',
+            'low_stock_threshold.max' => 'Low stock threshold cannot exceed 100,000.',
         ]);
 
         if ($request->has('cost_price')) {

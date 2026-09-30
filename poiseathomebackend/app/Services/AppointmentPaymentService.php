@@ -16,6 +16,7 @@ class AppointmentPaymentService
         $hasPending = $appointment->payments()->where("status", "pending_verification")->exists();
         
         $remainingDownpayment = max(0, $requiredDownpayment - $verifiedAmount);
+        $remainingBalance = max(0, $servicePrice - $verifiedAmount);
 
         $state = "unpaid";
         if ($verifiedAmount >= $servicePrice) {
@@ -31,6 +32,7 @@ class AppointmentPaymentService
             "required_downpayment" => (string) number_format($requiredDownpayment, 2, ".", ""),
             "verified_amount" => (string) number_format($verifiedAmount, 2, ".", ""),
             "remaining_required_downpayment" => (string) number_format($remainingDownpayment, 2, ".", ""),
+            "remaining_balance" => (string) number_format($remainingBalance, 2, ".", ""),
             "payment_state" => $state,
         ];
     }

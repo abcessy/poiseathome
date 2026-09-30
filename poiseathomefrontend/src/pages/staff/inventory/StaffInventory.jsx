@@ -62,18 +62,32 @@ const StaffInventory = () => {
     if (!activeModal || !activeModal.product) return;
     const { type, product } = activeModal;
     
+    const qty = Number(formData.quantity);
+    if (!qty || qty <= 0) {
+      await messageDialog('Please enter a valid quantity greater than zero.');
+      return;
+    }
+    if (qty > 100000) {
+      await messageDialog('Quantity cannot exceed 100,000.');
+      return;
+    }
+    if (product.unit === 'piece' && !Number.isInteger(qty)) {
+      await messageDialog('Quantity must be a whole number for items counted in pieces.');
+      return;
+    }
+
     let url = `/staff/inventory/${product.id}`;
     let body = {};
 
     if (type === 'in') {
       url += '/stock-in';
-      body = { quantity: formData.quantity, notes: formData.notes };
+      body = { quantity: qty, notes: formData.notes };
     } else if (type === 'out') {
       url += '/stock-out';
-      body = { quantity: formData.quantity, notes: formData.notes };
+      body = { quantity: qty, notes: formData.notes };
     } else if (type === 'adjust') {
       url += '/adjust';
-      body = { quantity: formData.quantity, reason: formData.notes, type: formData.type };
+      body = { quantity: qty, reason: formData.notes, type: formData.type };
     }
 
     setModalLoading(true);
@@ -244,8 +258,9 @@ const StaffInventory = () => {
                 </label>
                 <input 
                   type="number" 
-                  step="any" 
-                  min="0.001" 
+                  step={activeModal.product.unit === 'piece' ? '1' : '0.001'} 
+                  min={activeModal.product.unit === 'piece' ? '1' : '0.001'} 
+                  max="100000"
                   required 
                   value={formData.quantity}
                   onChange={e => setFormData({ ...formData, quantity: e.target.value })}

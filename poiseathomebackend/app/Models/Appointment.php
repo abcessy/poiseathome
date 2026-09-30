@@ -38,7 +38,7 @@ class Appointment extends Model
     protected function casts(): array
     {
         return [
-            'appointment_date' => 'date',
+            'appointment_date' => 'date:Y-m-d',
             'service_price_snapshot' => 'decimal:2',
             'required_downpayment_amount' => 'decimal:2',
             'extended_minutes' => 'integer',

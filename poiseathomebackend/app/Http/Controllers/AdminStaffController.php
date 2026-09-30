@@ -66,11 +66,17 @@ class AdminStaffController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->has('contact_number') && $request->contact_number !== null) {
+            $request->merge(['contact_number' => preg_replace('/[\s\-]/', '', (string) $request->contact_number)]);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'contact_number' => 'required|string|max:50',
+            'contact_number' => ['required', 'string', 'regex:/^(09\d{9}|\+639\d{9})$/'],
             'password' => 'required|string|min:8|confirmed',
+        ], [
+            'contact_number.regex' => 'The contact number must be a valid Philippine mobile number (e.g. 09123456789 or +639123456789).',
         ]);
 
         $user = User::create([
@@ -107,10 +113,16 @@ class AdminStaffController extends Controller
             return response()->json(['message' => 'Not a staff member'], 404);
         }
 
+        if ($request->has('contact_number') && $request->contact_number !== null) {
+            $request->merge(['contact_number' => preg_replace('/[\s\-]/', '', (string) $request->contact_number)]);
+        }
+
         $validatedUser = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'contact_number' => 'sometimes|string|max:50',
+            'contact_number' => ['sometimes', 'string', 'regex:/^(09\d{9}|\+639\d{9})$/'],
             'is_active' => 'sometimes|boolean',
+        ], [
+            'contact_number.regex' => 'The contact number must be a valid Philippine mobile number (e.g. 09123456789 or +639123456789).',
         ]);
 
         $validatedProfile = $request->validate([

@@ -24,7 +24,7 @@ class InventoryController extends Controller
             return $product;
         });
 
-        if ($request->has('status') && $request->status !== '') {
+        if ($request->filled('status')) {
             $products = $products->filter(function($product) use ($request) {
                 return $product->inventory_status === $request->status;
             })->values();
@@ -38,9 +38,9 @@ class InventoryController extends Controller
         $this->ensureProductIsActive($product);
 
         $validated = $request->validate([
-            'quantity' => 'required|numeric|min:0.001',
+            'quantity' => $this->quantityRules($product),
             'notes' => 'nullable|string'
-        ]);
+        ], $this->quantityValidationMessages());
 
         try {
             $this->inventoryService->adjustStock(
@@ -61,9 +61,9 @@ class InventoryController extends Controller
         $this->ensureProductIsActive($product);
 
         $validated = $request->validate([
-            'quantity' => 'required|numeric|min:0.001',
+            'quantity' => $this->quantityRules($product),
             'notes' => 'required|string'
-        ]);
+        ], $this->quantityValidationMessages());
 
         try {
             $this->inventoryService->adjustStock(
@@ -89,9 +89,9 @@ class InventoryController extends Controller
 
         $validated = $request->validate([
             'type' => 'required|in:adjustment_in,adjustment_out',
-            'quantity' => 'required|numeric|min:0.001',
+            'quantity' => $this->quantityRules($product),
             'reason' => 'required|string'
-        ]);
+        ], $this->quantityValidationMessages());
 
         try {
             $this->inventoryService->adjustStock(
@@ -109,6 +109,23 @@ class InventoryController extends Controller
                 'message' => $e->getMessage()
             ], 422);
         }
+    }
+
+    private function quantityRules(Product $product): array
+    {
+        if ($product->unit === 'piece') {
+            return ['required', 'integer', 'min:1', 'max:100000'];
+        }
+        return ['required', 'numeric', 'min:0.001', 'max:100000'];
+    }
+
+    private function quantityValidationMessages(): array
+    {
+        return [
+            'quantity.integer' => 'The quantity must be a whole number for items counted in pieces.',
+            'quantity.max' => 'The quantity cannot exceed 100,000.',
+            'quantity.min' => 'The quantity must be at least :min.',
+        ];
     }
 
     public function movements(Product $product)

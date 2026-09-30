@@ -34,13 +34,27 @@ const AdminInventoryDetail = () => {
 
   const handleAction = async (e) => {
     e.preventDefault();
+    const qty = Number(formData.quantity);
+    if (!qty || qty <= 0) {
+      await messageDialog('Please enter a valid quantity greater than zero.');
+      return;
+    }
+    if (qty > 100000) {
+      await messageDialog('Quantity cannot exceed 100,000.');
+      return;
+    }
+    if (product.unit === 'piece' && !Number.isInteger(qty)) {
+      await messageDialog('Quantity must be a whole number for items counted in pieces.');
+      return;
+    }
+
     let url = `/admin/inventory/${id}`;
     let method = 'POST';
     let body = {};
 
-    if (showModal === 'in') { url += '/stock-in'; body = { quantity: formData.quantity, notes: formData.notes }; }
-    else if (showModal === 'out') { url += '/stock-out'; body = { quantity: formData.quantity, notes: formData.notes }; }
-    else if (showModal === 'adjust') { url += '/adjust'; body = { quantity: formData.quantity, reason: formData.notes, type: formData.type }; }
+    if (showModal === 'in') { url += '/stock-in'; body = { quantity: qty, notes: formData.notes }; }
+    else if (showModal === 'out') { url += '/stock-out'; body = { quantity: qty, notes: formData.notes }; }
+    else if (showModal === 'adjust') { url += '/adjust'; body = { quantity: qty, reason: formData.notes, type: formData.type }; }
 
     try {
       const res = await fetchApi(url, { method, body: JSON.stringify(body) });
@@ -170,7 +184,16 @@ const AdminInventoryDetail = () => {
 
               <div>
                 <label className="block text-sm font-semibold mb-1">Quantity ({product.unit})</label>
-                <input required type="number" step="0.001" min="0.001" className="w-full px-3 py-2 border rounded-lg" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} />
+                <input
+                  required
+                  type="number"
+                  step={product.unit === 'piece' ? '1' : '0.001'}
+                  min={product.unit === 'piece' ? '1' : '0.001'}
+                  max="100000"
+                  className="w-full px-3 py-2 border rounded-lg"
+                  value={formData.quantity}
+                  onChange={e => setFormData({...formData, quantity: e.target.value})}
+                />
               </div>
               
               <div>

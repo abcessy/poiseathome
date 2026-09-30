@@ -54,6 +54,14 @@ class InventoryService
             throw new Exception("Quantity must be greater than zero.", 422);
         }
 
+        if ($quantity > 100000) {
+            throw new Exception("Quantity cannot exceed 100,000.", 422);
+        }
+
+        if ($product->unit === 'piece' && floor($quantity) != $quantity) {
+            throw new Exception("Quantity must be a whole number for items counted in pieces.", 422);
+        }
+
         if (!in_array($type, ['stock_in', 'stock_out', 'adjustment_in', 'adjustment_out', 'appointment_usage', 'appointment_usage_reversal'])) {
             throw new Exception("Invalid movement type.", 422);
         }

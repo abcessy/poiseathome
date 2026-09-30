@@ -22,12 +22,18 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
+        if ($request->has('contact_number') && $request->contact_number !== null) {
+            $request->merge(['contact_number' => preg_replace('/[\s\-]/', '', (string) $request->contact_number)]);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'contact_number' => 'required|string|max:50',
+            'contact_number' => ['required', 'string', 'regex:/^(09\d{9}|\+639\d{9})$/'],
             'password' => 'required|string|min:8|confirmed',
             'terms_accepted' => 'required|accepted',
+        ], [
+            'contact_number.regex' => 'The contact number must be a valid Philippine mobile number (e.g. 09123456789 or +639123456789).',
         ]);
 
         $user = User::create([

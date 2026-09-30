@@ -25,6 +25,11 @@ const Register = () => {
       setError('Complete your personal details to continue.');
       return;
     }
+    const cleanPhone = formData.contact_number.trim().replace(/[\s-]/g, '');
+    if (!/^(09\d{9}|\+639\d{9})$/.test(cleanPhone)) {
+      setError('Please enter a valid Philippine mobile number (e.g. 09123456789 or +639123456789).');
+      return;
+    }
     setStep(2);
   };
 

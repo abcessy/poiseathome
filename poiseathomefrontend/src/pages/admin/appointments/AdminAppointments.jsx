@@ -4,6 +4,7 @@ import { fetchApi } from '../../../services/api';
 import DashboardLayout from '../../../layouts/DashboardLayout';
 import { StatusBadge } from '../../customer/appointments/CustomerAppointments';
 import { Eye } from 'lucide-react';
+import { formatDate, formatTime } from '../../../utils/formatters';
 
 const AdminAppointments = () => {
   const [appointments, setAppointments] = useState([]);
@@ -77,8 +78,8 @@ const AdminAppointments = () => {
                       <p className="font-semibold text-text-primary text-sm mt-0.5">{app.service_name_snapshot}</p>
                     </td>
                     <td className="p-4">
-                      <p className="text-sm font-medium">{app.appointment_date}</p>
-                      <p className="text-xs text-text-muted mt-0.5">{app.start_time}</p>
+                      <p className="text-sm font-medium">{formatDate(app.appointment_date)}</p>
+                      <p className="text-xs text-text-muted mt-0.5">{formatTime(app.start_time)}</p>
                     </td>
                     <td className="p-4 text-sm font-medium">{app.customer_name_snapshot}</td>
                     <td className="p-4 text-sm">{app.staff?.profile?.display_name || app.staff?.name}</td>

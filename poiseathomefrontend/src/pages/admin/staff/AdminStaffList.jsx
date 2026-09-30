@@ -34,11 +34,18 @@ const AdminStaffList = () => {
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const cleanPhone = formData.contact_number.trim().replace(/[\s-]/g, '');
+    if (!/^(09\d{9}|\+639\d{9})$/.test(cleanPhone)) {
+      setError('Please enter a valid Philippine mobile number (e.g. 09123456789 or +639123456789).');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetchApi('/admin/staff', {
         method: 'POST',
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...formData, contact_number: cleanPhone })
       });
       const data = await res.json();
       if (res.ok) {

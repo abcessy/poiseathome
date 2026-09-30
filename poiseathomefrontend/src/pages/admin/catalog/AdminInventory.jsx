@@ -16,21 +16,26 @@ const AdminInventory = () => {
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
 
-  useEffect(() => { loadInventory(); }, [filter]);
+  useEffect(() => { loadInventory(); }, []);
 
   const loadInventory = async () => {
     setLoading(true);
     try {
-      const res = await fetchApi(`/admin/inventory?status=${filter}`);
-      if (res.ok) setProducts((await res.json()).data);
+      const res = await fetchApi('/admin/inventory');
+      if (res.ok) {
+        const json = await res.json();
+        setProducts(json.data || []);
+      }
     } catch(e) {} finally { setLoading(false); }
   };
-
-  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase()));
 
   const totalActive = products.length;
   const lowCount = products.filter(p => p.inventory_status === 'low_stock').length;
   const outCount = products.filter(p => p.inventory_status === 'out_of_stock').length;
+
+  const filtered = products
+    .filter(p => !filter || p.inventory_status === filter)
+    .filter(p => (p.name || '').toLowerCase().includes(search.toLowerCase()) || (p.sku || '').toLowerCase().includes(search.toLowerCase()));
 
   return (
     <DashboardLayout role="admin">

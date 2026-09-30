@@ -74,6 +74,32 @@ const AdminProducts = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+
+    const lowStock = Number(formData.low_stock_threshold) || 0;
+    const initialQty = (!editingProd && formData.initial_quantity !== '' && formData.initial_quantity !== null && formData.initial_quantity !== undefined)
+      ? Number(formData.initial_quantity)
+      : null;
+
+    if (formData.unit === 'piece') {
+      if (!Number.isInteger(lowStock)) {
+        await messageDialog('Low stock threshold must be a whole number for items counted in pieces.');
+        return;
+      }
+      if (initialQty !== null && !Number.isInteger(initialQty)) {
+        await messageDialog('Initial quantity must be a whole number for items counted in pieces.');
+        return;
+      }
+    }
+
+    if (lowStock > 100000) {
+      await messageDialog('Low stock threshold cannot exceed 100,000.');
+      return;
+    }
+    if (initialQty !== null && initialQty > 100000) {
+      await messageDialog('Initial quantity cannot exceed 100,000.');
+      return;
+    }
+
     try {
       const url = editingProd ? `/admin/products/${editingProd.id}` : '/admin/products';
       const payload = {
@@ -83,7 +109,7 @@ const AdminProducts = () => {
         description: formData.description || null,
         brand: formData.brand || null,
         unit: formData.unit,
-        low_stock_threshold: Number(formData.low_stock_threshold) || 0,
+        low_stock_threshold: lowStock,
         is_active: Boolean(formData.is_active),
       };
 
@@ -93,8 +119,8 @@ const AdminProducts = () => {
         payload.cost_price = null;
       }
 
-      if (!editingProd && formData.initial_quantity !== '' && formData.initial_quantity !== null && formData.initial_quantity !== undefined) {
-        payload.initial_quantity = Number(formData.initial_quantity);
+      if (initialQty !== null) {
+        payload.initial_quantity = initialQty;
       }
       
       const res = await fetchApi(url, {
@@ -244,7 +270,16 @@ const AdminProducts = () => {
 
               <div>
                 <label className="block text-sm font-semibold mb-1">Low Stock Threshold</label>
-                <input required type="number" step="0.001" min="0" className="w-full px-3 py-2 border rounded-lg" value={formData.low_stock_threshold} onChange={e => setFormData({...formData, low_stock_threshold: e.target.value})} />
+                <input
+                  required
+                  type="number"
+                  step={formData.unit === 'piece' ? '1' : '0.001'}
+                  min="0"
+                  max="100000"
+                  className="w-full px-3 py-2 border rounded-lg"
+                  value={formData.low_stock_threshold}
+                  onChange={e => setFormData({...formData, low_stock_threshold: e.target.value})}
+                />
               </div>
 
               <div>
@@ -256,7 +291,15 @@ const AdminProducts = () => {
                 <div className="col-span-1 md:col-span-2 bg-lavender p-4 rounded-xl border border-primary-purple/20">
                   <label className="block text-sm font-semibold mb-1 text-primary-deep">Initial Inventory Quantity</label>
                   <p className="text-xs text-primary-purple mb-2">Sets the starting stock level immediately.</p>
-                  <input type="number" step="0.001" min="0" className="w-full px-3 py-2 border rounded-lg" value={formData.initial_quantity || ''} onChange={e => setFormData({...formData, initial_quantity: e.target.value})} />
+                  <input
+                    type="number"
+                    step={formData.unit === 'piece' ? '1' : '0.001'}
+                    min="0"
+                    max="100000"
+                    className="w-full px-3 py-2 border rounded-lg"
+                    value={formData.initial_quantity || ''}
+                    onChange={e => setFormData({...formData, initial_quantity: e.target.value})}
+                  />
                 </div>
               )}
 

@@ -16,7 +16,7 @@ class AuthTest extends TestCase
         $response = $this->postJson('/api/v1/auth/register', [
             'name' => 'John Doe',
             'email' => 'john@example.com',
-            'contact_number' => '1234567890',
+            'contact_number' => '09123456789',
             'address' => '123 Street',
             'password' => 'password',
             'password_confirmation' => 'password',
@@ -33,7 +33,7 @@ class AuthTest extends TestCase
         $response = $this->postJson('/api/v1/auth/register', [
             'name' => 'John Doe',
             'email' => 'john@example.com',
-            'contact_number' => '1234567890',
+            'contact_number' => '09123456789',
             'password' => 'password',
             'password_confirmation' => 'password',
             'terms_accepted' => false,

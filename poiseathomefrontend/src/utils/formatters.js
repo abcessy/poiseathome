@@ -14,12 +14,23 @@ export const formatDuration = (minutes) => {
   return `${mins} min`;
 };
 
+export const getTodayDateString = () => {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+};
+
 export const formatDate = (value) => {
   if (!value) return '—';
-  const dateOnly = /^\d{4}-\d{2}-\d{2}/.test(value) ? `${value.slice(0, 10)}T00:00:00+08:00` : value;
+  const str = String(value).trim();
+  // If date-only string like YYYY-MM-DD, anchor to Manila midnight
+  const dateObj = /^\d{4}-\d{2}-\d{2}$/.test(str)
+    ? new Date(`${str}T00:00:00+08:00`)
+    : new Date(str);
+
+  if (isNaN(dateObj.getTime())) return str;
+
   return new Intl.DateTimeFormat('en-PH', {
     timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric'
-  }).format(new Date(dateOnly));
+  }).format(dateObj);
 };
 
 export const formatTime = (value) => {

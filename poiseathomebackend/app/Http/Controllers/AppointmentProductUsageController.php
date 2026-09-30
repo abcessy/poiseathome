@@ -40,16 +40,24 @@ class AppointmentProductUsageController extends Controller
             return response()->json(['message' => 'Product usage can only be recorded when the appointment is in progress.'], 400);
         }
 
-        $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'quantity' => 'required|numeric|min:0.001',
-            'notes' => 'nullable|string'
-        ]);
-
-        $product = Product::findOrFail($validated['product_id']);
-        if (!$product->is_active || !$product->category->is_active) {
+        $product = Product::find($request->input('product_id'));
+        if (!$product || !$product->is_active || !$product->category?->is_active) {
             return response()->json(['message' => 'This product is inactive and cannot be used.'], 400);
         }
+
+        $quantityRule = $product->unit === 'piece'
+            ? ['required', 'integer', 'min:1', 'max:100000']
+            : ['required', 'numeric', 'min:0.001', 'max:100000'];
+
+        $validated = $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'quantity' => $quantityRule,
+            'notes' => 'nullable|string'
+        ], [
+            'quantity.integer' => 'The quantity must be a whole number for items counted in pieces.',
+            'quantity.max' => 'The quantity cannot exceed 100,000.',
+            'quantity.min' => 'The quantity must be at least :min.',
+        ]);
 
         try {
             DB::transaction(function () use ($product, $validated, $appointment, $request) {

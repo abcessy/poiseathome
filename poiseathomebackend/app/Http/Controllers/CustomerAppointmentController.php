@@ -73,4 +73,41 @@ class CustomerAppointmentController extends Controller
 
         return response()->json(['status' => 'success', 'data' => $appointment]);
     }
+
+    public function reschedule(Request $request, Appointment $appointment, \App\Services\AppointmentBookingService $bookingService)
+    {
+        if ($appointment->customer_id !== $request->user()->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'date' => 'required|date_format:Y-m-d|after_or_equal:today',
+            'start_time' => 'required|string',
+            'staff_id' => 'nullable|exists:users,id',
+        ], [
+            'date.after_or_equal' => 'Appointment date cannot be in the past.',
+        ]);
+
+        try {
+            $updated = $bookingService->rescheduleAppointment(
+                $appointment,
+                $validated['date'],
+                $validated['start_time'],
+                $validated['staff_id'] ?? null,
+                $request->user()
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Appointment rescheduled successfully.',
+                'data' => $updated,
+            ]);
+        } catch (\Exception $e) {
+            $code = in_array($e->getCode(), [400, 403, 404, 409, 422]) ? $e->getCode() : 422;
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], $code);
+        }
+    }
 }

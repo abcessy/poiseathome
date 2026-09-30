@@ -96,7 +96,7 @@ const StaffAppointmentDetail = () => {
     setCancelError('');
     try {
       const res = await fetchApi(`/staff/appointments/${id}/cancel`, {
-        method: 'POST',
+        method: 'PATCH',
         body: JSON.stringify({ reason: cancelReason.trim() })
       });
       if (res.ok) {

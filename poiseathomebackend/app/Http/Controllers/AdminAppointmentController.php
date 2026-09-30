@@ -140,25 +140,25 @@ class AdminAppointmentController extends Controller
                     ->first();
 
                 if (!$newStaff || !$newStaff->profile?->is_available) {
-                    throw new \RuntimeException('Staff member is not available.');
+                    throw new \RuntimeException('The selected staff member is currently set as unavailable in their profile.');
                 }
                 if (!$newStaff->services()->where('service_id', $appointment->service_id)->exists()) {
-                    throw new \RuntimeException('Staff member is not qualified for this service.');
+                    throw new \RuntimeException('The selected staff member is not qualified to perform ' . $appointment->service_name_snapshot . '.');
                 }
                 if ($newStaff->daysOff()->whereDate('date', $appointment->appointment_date)->exists()) {
-                    throw new \RuntimeException('Staff member is on a day off for this date.');
+                    throw new \RuntimeException('The selected staff member has an approved day off on ' . $appointment->appointment_date . '.');
                 }
 
-                $hasConflict = Appointment::where('staff_user_id', $newStaff->id)
+                $conflict = Appointment::where('staff_user_id', $newStaff->id)
                     ->whereKeyNot($appointment->id)
                     ->whereDate('appointment_date', $appointment->appointment_date)
                     ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
                     ->where('start_time', '<', $appointment->end_time)
                     ->where('end_time', '>', $appointment->start_time)
                     ->lockForUpdate()
-                    ->exists();
-                if ($hasConflict) {
-                    throw new \RuntimeException('Staff member has an overlapping appointment.');
+                    ->first();
+                if ($conflict) {
+                    throw new \RuntimeException("The selected staff member already has an overlapping appointment ({$conflict->appointment_number}, {$conflict->start_time} - {$conflict->end_time}) on this date.");
                 }
 
                 $oldStaffId = $appointment->staff_user_id;
@@ -243,5 +243,38 @@ class AdminAppointmentController extends Controller
         ]);
 
         return response()->json(['status' => 'success', 'data' => $appointment->fresh(['customer', 'staff.profile', 'service'])]);
+    }
+
+    public function reschedule(Request $request, Appointment $appointment, \App\Services\AppointmentBookingService $bookingService)
+    {
+        $validated = $request->validate([
+            'date' => 'required|date_format:Y-m-d|after_or_equal:today',
+            'start_time' => 'required|string',
+            'staff_id' => 'nullable|exists:users,id',
+        ], [
+            'date.after_or_equal' => 'Appointment date cannot be in the past.',
+        ]);
+
+        try {
+            $updated = $bookingService->rescheduleAppointment(
+                $appointment,
+                $validated['date'],
+                $validated['start_time'],
+                $validated['staff_id'] ?? null,
+                $request->user()
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Appointment rescheduled successfully.',
+                'data' => $updated,
+            ]);
+        } catch (\Exception $e) {
+            $code = in_array($e->getCode(), [400, 403, 404, 409, 422]) ? $e->getCode() : 422;
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], $code);
+        }
     }
 }

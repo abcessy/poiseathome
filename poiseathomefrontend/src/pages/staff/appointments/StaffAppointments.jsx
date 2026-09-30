@@ -4,6 +4,7 @@ import { fetchApi } from '../../../services/api';
 import DashboardLayout from '../../../layouts/DashboardLayout';
 import { StatusBadge } from '../../customer/appointments/CustomerAppointments';
 import { Calendar, Clock, MapPin } from 'lucide-react';
+import { formatDate, formatTime } from '../../../utils/formatters';
 
 const StaffAppointments = () => {
   const [appointments, setAppointments] = useState([]);
@@ -78,10 +79,10 @@ const StaffAppointments = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-text-muted bg-gray-50 p-4 rounded-xl">
                 <div className="flex items-center">
-                  <Calendar className="w-4 h-4 mr-2 text-primary-purple shrink-0" /> {app.appointment_date}
+                  <Calendar className="w-4 h-4 mr-2 text-primary-purple shrink-0" /> {formatDate(app.appointment_date)}
                 </div>
                 <div className="flex items-center">
-                  <Clock className="w-4 h-4 mr-2 text-primary-purple shrink-0" /> {app.start_time} - {app.end_time}
+                  <Clock className="w-4 h-4 mr-2 text-primary-purple shrink-0" /> {formatTime(app.start_time)} - {formatTime(app.end_time)}
                 </div>
                 <div className="flex items-center truncate">
                   <MapPin className="w-4 h-4 mr-2 text-primary-purple shrink-0" /> <span className="truncate">{app.service_address}</span>

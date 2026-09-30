@@ -25,7 +25,7 @@ class AppointmentAvailabilityService
         return max($activeStaffCount, 1);
     }
 
-    public function getAvailableSlots(Service $service, User $staff, $dateString, int $customDuration = 0, $customer = null)
+    public function getAvailableSlots(Service $service, User $staff, $dateString, int $customDuration = 0, $customer = null, ?int $ignoreAppointmentId = null)
     {
         // 1. Validate Date
         $tz = config('app.timezone', 'Asia/Manila');
@@ -62,18 +62,26 @@ class AppointmentAvailabilityService
         $duration = $customDuration > 0 ? $customDuration : (int) $service->duration_minutes;
 
         // 4. Fetch Existing Appointments and System Capacity
-        $allDayAppointments = Appointment::whereDate('appointment_date', $date->format('Y-m-d'))
-            ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
-            ->get(['staff_user_id', 'start_time', 'end_time']);
+        $appointmentsQuery = Appointment::whereDate('appointment_date', $date->format('Y-m-d'))
+            ->whereIn('status', ['pending', 'confirmed', 'in_progress']);
+
+        if ($ignoreAppointmentId) {
+            $appointmentsQuery->whereKeyNot($ignoreAppointmentId);
+        }
+
+        $allDayAppointments = $appointmentsQuery->get(['id', 'staff_user_id', 'start_time', 'end_time']);
 
         $staffAppointments = $allDayAppointments->where('staff_user_id', $staff->id);
         $customerAppointments = collect();
         if ($customer) {
             $customerId = $customer instanceof User ? $customer->id : (int) $customer;
-            $customerAppointments = Appointment::where('customer_id', $customerId)
+            $customerQuery = Appointment::where('customer_id', $customerId)
                 ->whereDate('appointment_date', $date->format('Y-m-d'))
-                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
-                ->get(['start_time', 'end_time']);
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress']);
+            if ($ignoreAppointmentId) {
+                $customerQuery->whereKeyNot($ignoreAppointmentId);
+            }
+            $customerAppointments = $customerQuery->get(['id', 'start_time', 'end_time']);
         }
         $systemCapacity = $this->getSystemHandlingCapacity();
 

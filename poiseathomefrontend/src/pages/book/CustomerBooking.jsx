@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { fetchApi } from '../../services/api';
-import { formatMoney, formatDuration } from '../../utils/formatters';
+import { formatMoney, formatDuration, getTodayDateString } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
 import { ArrowLeft, ArrowRight, CheckCircle, Clock, Calendar as CalendarIcon, User, MapPin, Scissors, ShieldCheck } from 'lucide-react';
 import BrandLogo from '../../components/BrandLogo';
@@ -327,7 +327,7 @@ const CustomerBooking = () => {
                 <label className="block text-sm font-medium mb-2">Date</label>
                 <input 
                   type="date" 
-                  min={new Date().toISOString().split('T')[0]}
+                  min={getTodayDateString()}
                   value={booking.date} 
                   onChange={e => checkAvailability(e.target.value)}
                   className="w-full md:w-1/2 px-4 py-3 border border-gray-200 rounded-xl focus:ring-primary-purple focus:border-primary-purple"

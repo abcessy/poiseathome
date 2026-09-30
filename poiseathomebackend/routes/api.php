@@ -112,7 +112,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/appointments/{appointment}', [\App\Http\Controllers\AdminAppointmentController::class, 'show']);
             Route::patch('/appointments/{appointment}/status', [\App\Http\Controllers\AdminAppointmentController::class, 'updateStatus']);
             Route::patch('/appointments/{appointment}/staff', [\App\Http\Controllers\AdminAppointmentController::class, 'reassignStaff']);
-            Route::patch('/appointments/{appointment}/cancel', [\App\Http\Controllers\AdminAppointmentController::class, 'cancel']);
+            Route::patch('/appointments/{appointment}/reschedule', [\App\Http\Controllers\AdminAppointmentController::class, 'reschedule']);
+            Route::match(['patch', 'post'], '/appointments/{appointment}/cancel', [\App\Http\Controllers\AdminAppointmentController::class, 'cancel']);
             Route::post('/appointments/{appointment}/extend-time', [\App\Http\Controllers\AdminAppointmentController::class, 'extendTime']);
             Route::get('/appointments/{appointment}/product-usages', [AppointmentProductUsageController::class, 'index']);
             Route::post('/appointments/{appointment}/product-usages/{usage}/reverse', [AppointmentProductUsageController::class, 'reverse']);
@@ -157,7 +158,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/appointments', [\App\Http\Controllers\StaffAppointmentController::class, 'index']);
             Route::get('/appointments/{appointment}', [\App\Http\Controllers\StaffAppointmentController::class, 'show']);
             Route::patch('/appointments/{appointment}/status', [\App\Http\Controllers\StaffAppointmentController::class, 'updateStatus']);
-            Route::patch('/appointments/{appointment}/cancel', [\App\Http\Controllers\StaffAppointmentController::class, 'cancel']);
+            Route::match(['patch', 'post'], '/appointments/{appointment}/cancel', [\App\Http\Controllers\StaffAppointmentController::class, 'cancel']);
             Route::post('/appointments/{appointment}/extend-time', [\App\Http\Controllers\StaffAppointmentController::class, 'extendTime']);
             
             // Phase 6: Staff Inventory & Usage
@@ -189,6 +190,7 @@ Route::prefix('v1')->group(function () {
             // Customer Appointments
             Route::get('/customer/appointments', [\App\Http\Controllers\CustomerAppointmentController::class, 'index']);
             Route::get('/customer/appointments/{appointment}', [\App\Http\Controllers\CustomerAppointmentController::class, 'show']);
+            Route::patch('/customer/appointments/{appointment}/reschedule', [\App\Http\Controllers\CustomerAppointmentController::class, 'reschedule']);
             Route::post('/customer/appointments/{appointment}/cancel', [\App\Http\Controllers\CustomerAppointmentController::class, 'cancel']);
 
             // Customer Payments

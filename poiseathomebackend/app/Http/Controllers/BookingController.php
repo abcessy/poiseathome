@@ -66,8 +66,11 @@ class BookingController extends Controller
             'service_id' => 'nullable|exists:services,id',
             'service_ids' => 'nullable',
             'staff_id' => 'required|exists:users,id',
-            'date' => 'required|date_format:Y-m-d',
+            'date' => 'required|date_format:Y-m-d|after_or_equal:today',
             'extended_minutes' => 'nullable|integer|min:0|max:180',
+            'ignore_appointment_id' => 'nullable|integer|exists:appointments,id',
+        ], [
+            'date.after_or_equal' => 'Appointment date cannot be in the past.',
         ]);
 
         $serviceIds = $request->input('service_ids');
@@ -101,7 +104,14 @@ class BookingController extends Controller
         }
 
         $totalDuration = (int) $services->sum('duration_minutes') + max(0, (int) $request->input('extended_minutes', 0));
-        $slots = $this->availabilityService->getAvailableSlots($services->first(), $staff, $request->date, $totalDuration, $request->user());
+        $slots = $this->availabilityService->getAvailableSlots(
+            $services->first(),
+            $staff,
+            $request->date,
+            $totalDuration,
+            $request->user(),
+            $request->input('ignore_appointment_id') ? (int) $request->input('ignore_appointment_id') : null
+        );
 
         return response()->json([
             'status' => 'success',
@@ -120,12 +130,14 @@ class BookingController extends Controller
             'service_ids' => 'nullable|array',
             'service_ids.*' => 'exists:services,id',
             'staff_id' => 'required|exists:users,id',
-            'date' => 'required|date_format:Y-m-d',
+            'date' => 'required|date_format:Y-m-d|after_or_equal:today',
             'start_time' => 'required|date_format:H:i',
             'service_address' => 'required|string',
             'address_notes' => 'nullable|string',
             'customer_notes' => 'nullable|string',
             'extended_minutes' => 'nullable|integer|min:0|max:180',
+        ], [
+            'date.after_or_equal' => 'Appointment date cannot be in the past.',
         ]);
 
         $serviceSelection = !empty($validated['service_ids']) ? $validated['service_ids'] : ($validated['service_id'] ?? null);
