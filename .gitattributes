@@ -1,0 +1,1 @@
+k8s/poiseathome/secret.yaml filter=git-crypt diff=git-crypt
