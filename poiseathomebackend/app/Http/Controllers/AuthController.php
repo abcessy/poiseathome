@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\EmailDeliveryException;
 use App\Models\User;
+use App\Services\AuditLogger;
 use App\Services\EmailVerificationService;
 use App\Services\PasswordResetService;
 use Illuminate\Http\Request;
@@ -44,6 +45,8 @@ class AuthController extends Controller
             'role' => 'customer',
             'is_active' => true,
         ]);
+
+        AuditLogger::log('AUTH_REGISTER', "New customer registered: {$user->name} ({$user->email})", $user, ['email' => $user->email], $user);
 
         try {
             $this->emailVerification->issue($user);
@@ -88,6 +91,8 @@ class AuthController extends Controller
 
         Auth::login($user);
 
+        AuditLogger::log('AUTH_LOGIN', "User {$user->name} logged in", $user, ['role' => $user->role], $user);
+
         return response()->json([
             'status' => 'success',
             'data' => $user,
@@ -96,6 +101,11 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        $user = Auth::user();
+        if ($user) {
+            AuditLogger::log('AUTH_LOGOUT', "User {$user->name} logged out", $user);
+        }
+
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { BarChart, Box, Calendar, ChevronDown, Clock, Home, LogOut, MapPin, Menu, Package, Scissors, Star, Tag, User, Users, X } from 'lucide-react';
+import { BarChart, Box, Calendar, ChevronDown, Clock, Home, LogOut, MapPin, Menu, Package, Scissors, Shield, Star, Tag, User, Users, X } from 'lucide-react';
 import NotificationBell from '../components/notifications/NotificationBell';
 import { mediaUrl } from '../services/api';
 import BrandLogo from '../components/BrandLogo';
@@ -17,7 +17,7 @@ const DashboardLayout = ({ children, role }) => {
     { label: 'Appointments', links: [{ label: 'Appointments', to: '/admin/appointments', icon: Calendar }, { label: 'Payment Reviews', to: '/admin/payments', icon: Tag }] },
     { label: 'Salon', links: [{ label: 'Services', to: '/admin/services', icon: Scissors }, { label: 'Service Categories', to: '/admin/service-categories', icon: Tag }, { label: 'Staff', to: '/admin/staff', icon: Users }] },
     { label: 'Inventory', links: [{ label: 'Product Inventory', to: '/admin/inventory', icon: Package }, { label: 'Products', to: '/admin/products', icon: Box }, { label: 'Product Categories', to: '/admin/product-categories', icon: Tag }] },
-    { label: null, links: [{ label: 'Reports & Analytics', to: '/admin/reports', icon: BarChart }] },
+    { label: null, links: [{ label: 'Reports & Analytics', to: '/admin/reports', icon: BarChart }, { label: 'Audit Logs', to: '/admin/audit-logs', icon: Shield }] },
   ];
   const staffGroups = [
     { label: null, links: [{ label: 'Today', to: '/staff', icon: Home }, { label: 'My Schedule', to: '/staff/appointments', icon: Calendar }] },

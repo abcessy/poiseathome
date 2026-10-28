@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\StaffProfile;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -51,6 +52,13 @@ class AdminStaffController extends Controller
         $user->update([
             'is_active' => $newActiveState
         ]);
+
+        AuditLogger::log(
+            'USER_STATUS_CHANGE',
+            "User {$user->name} was " . ($newActiveState ? 'activated' : 'deactivated'),
+            $user,
+            ['user_id' => $user->id, 'new_active_state' => $newActiveState]
+        );
 
         return response()->json([
             'status' => 'success',

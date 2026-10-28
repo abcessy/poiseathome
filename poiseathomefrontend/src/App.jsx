@@ -32,6 +32,7 @@ import StaffAvailability from './pages/staff/availability/StaffAvailability';
 import StaffInventory from './pages/staff/inventory/StaffInventory';
 
 import AdminReports from "./pages/admin/reports/AdminReports";
+import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
 import StaffReports from "./pages/staff/reports/StaffReports";
 import ServiceCatalog from "./pages/catalog/ServiceCatalog";
 import CustomerBooking from "./pages/book/CustomerBooking";
@@ -78,6 +79,7 @@ function App() {
           {/* Admin Routes */}
           <Route path="/admin" element={<RoleRoute allowedRoles={['admin']}><AdminDashboard /></RoleRoute>} />
           <Route path="/admin/reports" element={<RoleRoute allowedRoles={['admin']}><AdminReports /></RoleRoute>} />
+          <Route path="/admin/audit-logs" element={<RoleRoute allowedRoles={['admin']}><AdminAuditLogs /></RoleRoute>} />
           <Route path="/admin/service-categories" element={<RoleRoute allowedRoles={['admin']}><AdminCategories /></RoleRoute>} />
           <Route path="/admin/services" element={<RoleRoute allowedRoles={['admin']}><AdminServices /></RoleRoute>} />
           <Route path="/admin/staff" element={<RoleRoute allowedRoles={['admin']}><AdminStaffList /></RoleRoute>} />

@@ -136,6 +136,10 @@ Route::prefix('v1')->group(function () {
             Route::post('/inventory/{product}/stock-out', [InventoryController::class, 'stockOut']);
             Route::post('/inventory/{product}/adjust', [InventoryController::class, 'adjust']);
             Route::get('/inventory/{product}/movements', [InventoryController::class, 'movements']);
+
+            // Audit Logs
+            Route::get('/audit-logs', [\App\Http\Controllers\AuditLogController::class, 'index']);
+            Route::get('/audit-logs/{auditLog}', [\App\Http\Controllers\AuditLogController::class, 'show']);
         });
 
         // Staff Routes
