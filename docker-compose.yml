@@ -157,9 +157,6 @@ services:
       - backend
     networks:
       - poise_network
-    volumes:
-      - ./poiseathomefrontend:/app
-      - /app/node_modules
 
 networks:
   poise_network:
