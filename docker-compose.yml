@@ -37,7 +37,7 @@ services:
       - poise_network
 
   minio:
-    image: minio/minio:latest
+    image: cgr.dev/chainguard/minio:latest
     container_name: poiseathome_minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -53,7 +53,7 @@ services:
       - poise_network
 
   minio-init:
-    image: minio/mc:latest
+    image: cgr.dev/chainguard/minio:latest
     container_name: poiseathome_minio_init
     restart: "no"
     depends_on:
@@ -79,6 +79,7 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
+      - APP_KEY=${APP_KEY:-base64:HQVFU/ts243r1iLLch+5UQ/6uMjq+r1rl948PpEAa2U=}
       - DB_CONNECTION=mysql
       - DB_HOST=mysql
       - DB_PORT=3306
@@ -124,7 +125,10 @@ services:
       - AWS_ENDPOINT=http://minio:9000
       - AWS_USE_PATH_STYLE_ENDPOINT=true
     command: >-
-      sh -c "php artisan config:clear &&
+      sh -c "if [ ! -f vendor/autoload.php ]; then composer install --no-interaction --prefer-dist; fi &&
+      if [ ! -f .env ]; then cp .env.example .env; fi &&
+      if ! grep -q '^APP_KEY=base64:' .env; then php artisan key:generate --force; fi &&
+      php artisan config:clear &&
       php artisan migrate --force &&
       php artisan db:seed --force &&
       cd public &&
